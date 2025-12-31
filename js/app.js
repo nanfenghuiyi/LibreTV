@@ -401,6 +401,100 @@ function cancelAddCustomApi() {
     }
 }
 
+// 显示导入自定义API表单
+function showImportCustomApiForm() {
+    document.getElementById('addCustomApiForm').classList.add('hidden');
+    document.getElementById('importCustomApiForm').classList.remove('hidden');
+}
+
+// 取消导入自定义API表单
+function cancelImportCustomApiForm() {
+    document.getElementById('importCustomApiForm').classList.add('hidden');
+    document.getElementById('importFileInput').value = '';
+}
+
+// 导入自定义API
+function importCustomApis() {
+    const fileInput = document.getElementById('importFileInput');
+    if (!fileInput.files || fileInput.files.length === 0) {
+        showToast('请选择要导入的JSON文件', 'warning');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+        showToast('请选择JSON格式的文件', 'warning');
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            
+            if (!Array.isArray(importedData)) {
+                showToast('JSON格式不正确，应为数组类型', 'warning');
+                return;
+            }
+            
+            let importedCount = 0;
+            let existingCount = 0;
+            
+            importedData.forEach(item => {
+                if (item.name && item.baseUrl) {
+                    // 检查是否已存在相同的URL
+                    const exists = customAPIs.some(api => api.url === item.baseUrl);
+                    if (!exists) {
+                        // 处理URL格式
+                        let url = item.baseUrl;
+                        if (url.endsWith('/')) {
+                            url = url.slice(0, -1);
+                        }
+                        
+                        // 添加到自定义API列表
+                        customAPIs.push({ 
+                            name: item.name, 
+                            url: url, 
+                            detail: '', 
+                            isAdult: false // 默认非成人内容
+                        });
+                        importedCount++;
+                    } else {
+                        existingCount++;
+                    }
+                }
+            });
+            
+            // 保存到localStorage
+            localStorage.setItem('customAPIs', JSON.stringify(customAPIs));
+            
+            // 重新渲染自定义API列表
+            renderCustomAPIsList();
+            updateSelectedApiCount();
+            
+            // 显示导入结果
+            let message = `成功导入 ${importedCount} 个API`;
+            if (existingCount > 0) {
+                message += `，${existingCount} 个API已存在`;
+            }
+            showToast(message, 'success');
+            
+            // 关闭导入表单
+            cancelImportCustomApiForm();
+            
+        } catch (error) {
+            showToast('JSON文件解析失败，请检查文件格式', 'error');
+            console.error('JSON解析错误:', error);
+        }
+    };
+    
+    reader.onerror = function() {
+        showToast('文件读取失败，请重试', 'error');
+    };
+    
+    reader.readAsText(file);
+}
+
 // 添加自定义API
 function addCustomApi() {
     const nameInput = document.getElementById('customApiName');
