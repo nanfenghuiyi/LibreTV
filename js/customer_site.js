@@ -87,6 +87,18 @@ const CUSTOMER_SITES = {
     api: "https://zy.xmm.hk/api.php/provide/vod",
     name: "小猫咪资源",
   },
+  baiduyun: {
+    api: "https://api.apibdzy.com/api.php/provide/vod",
+    name: "百度云资源"
+  },
+  youku: {
+    api: "https://api.ukuapi.com/api.php/provide/vod",
+    name: "优酷资源"
+  },
+  huya: {
+    api: "https://www.huyaapi.com/api.php/provide/vod",
+    name: "虎牙资源"
+  }
 };
 
 // 调用全局方法合并
