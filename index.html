@@ -121,16 +121,35 @@
                     <label
                         class="block text-sm font-medium text-gray-400 border-b border-[#333] w-full pb-1">自定义API</label>
                     <div class="flex space-x-1">
-                        <svg class="bg-[#333] hover:bg-[#444] text-white text-xs px-2 py-1 rounded"
+                        <svg class="bg-[#333] hover:bg-[#444] text-white text-base w-6 h-6 rounded-full flex items-center justify-center p-1"
                             xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
                             onclick="showImportCustomApiForm()">
                             <path fill="currentColor"
                                 d="M5.5 20A5.5 5.5 0 0 1 0 14.5A5.5 5.5 0 0 1 5.5 9c1-2.35 3.3-4 6-4c3.43 0 6.24 2.66 6.5 6.03l.5-.03c2.5 0 4.5 2 4.5 4.5S21 20 18.5 20zm0-10C3 10 1 12 1 14.5S3 19 5.5 19h13a3.5 3.5 0 0 0 3.5-3.5a3.5 3.5 0 0 0-3.5-3.5c-.56 0-1.1.13-1.57.37l.07-.87A5.5 5.5 0 0 0 11.5 6a5.51 5.51 0 0 0-5.31 4.05zm6.5 7v-5.25L14.25 14l.75-.66l-3.5-3.5l-3.5 3.5l.75.66L11 11.75V17z" />
                         </svg>
+                        <svg onclick="showUrlImportModal()"
+                            class="bg-[#333] hover:bg-[#444] text-white text-base w-6 h-6 rounded-full flex items-center justify-center p-1"
+                            xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+                            <path fill="currentColor"
+                                d="M10.73 14.97c.27.11.36.41.24.66s-.41.37-.66.24h-.01c-.46-.21-.89-.51-1.27-.9a4.49 4.49 0 0 1 0-6.36l3.53-3.53a4.49 4.49 0 0 1 6.36 0a4.49 4.49 0 0 1 0 6.36l-1.63 1.63l-.15-1.26l1.08-1.08a3.513 3.513 0 0 0 0-4.95a3.513 3.513 0 0 0-4.95 0L9.73 9.32a3.513 3.513 0 0 0 0 4.95c.3.3.64.53 1 .7m-6.65 4.95a4.49 4.49 0 0 1 0-6.36l1.63-1.63l.15 1.26l-1.08 1.08a3.513 3.513 0 0 0 0 4.95a3.513 3.513 0 0 0 4.95 0l3.54-3.54a3.513 3.513 0 0 0 0-4.95c-.3-.3-.64-.53-1-.7v.01a.49.49 0 0 1-.24-.67c.12-.25.41-.37.66-.24h.01c.46.21.89.51 1.27.9a4.49 4.49 0 0 1 0 6.36l-3.53 3.53a4.49 4.49 0 0 1-6.36 0" />
+                        </svg>
                         <button onclick="showAddCustomApiForm()"
                             class="bg-[#333] hover:bg-[#444] text-white w-6 h-6 rounded-full text-center leading-none text-lg">+</button>
                     </div>
                 </div>
+
+                <!-- 自定义API批量操作按钮 -->
+                <div class="flex space-x-2 mb-2">
+                    <button onclick="selectAllCustomAPIs(true, false, event)"
+                        class="px-2 py-1 bg-[#333] hover:bg-[#444] text-white text-xs rounded">全选</button>
+                    <button onclick="selectAllCustomAPIs(false, false, event)"
+                        class="px-2 py-1 bg-[#333] hover:bg-[#444] text-white text-xs rounded">全不选</button>
+                    <button onclick="selectAllCustomAPIs(true, true, event)"
+                        class="px-2 py-1 bg-[#333] hover:bg-[#444] text-white text-xs rounded">全选普通</button>
+                    <button onclick="deleteAllCustomAPIs(event)"
+                        class="px-2 py-1 bg-red-700 hover:bg-red-800 text-white text-xs rounded">全删</button>
+                </div>
+
                 <div id="customApisList" class="max-h-32 overflow-y-auto mb-2">
                     <!-- 自定义API将显示在这里 -->
                 </div>
@@ -436,6 +455,34 @@
                     </div>
                 </form>
                 <p id="passwordError" class="text-red-500 mt-2 hidden">密码错误，请重试</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- URL导入API弹窗 -->
+    <div id="urlImportModal"
+        class="fixed inset-0 bg-black/95 hidden items-center justify-center z-[65] transition-opacity duration-300">
+        <div
+            class="bg-[#111] p-8 rounded-lg w-11/12 max-w-2xl border border-[#333] max-h-[90vh] flex flex-col absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+            <div class="flex justify-between items-center mb-6 flex-none">
+                <h2 class="text-2xl font-bold gradient-text">URL导入API</h2>
+                <button onclick="closeUrlImportModal()"
+                    class="text-gray-400 hover:text-white text-2xl transition-colors flex-shrink-0">&times;</button>
+            </div>
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-400 mb-2">配置URL</label>
+                <input type="text" id="urlImportInput"
+                    value="https://lunatv-config.htnf.dpdns.org/?format=3&source=jin18"
+                    class="w-full bg-[#111] border border-[#333] text-white px-4 py-3 rounded-lg focus:outline-none focus:border-white transition-colors mb-4">
+                <button onclick="fetchApiDataFromUrl()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">获取数据</button>
+            </div>
+            <div id="urlImportList" class="flex-1 overflow-y-auto mb-4 hidden">
+                <!-- API列表将在这里动态生成 -->
+            </div>
+            <div class="flex justify-end">
+                <button id="importSelectedApiBtn" onclick="importSelectedApis()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded hidden">导入选中的API</button>
             </div>
         </div>
     </div>

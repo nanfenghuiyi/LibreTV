@@ -18,6 +18,11 @@ function isPasswordProtected() {
  * 为了安全考虑，所有部署都必须设置密码
  */
 function isPasswordRequired() {
+    // 在本地开发环境下绕过密码验证
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::]') {
+        return false;
+    }
     return !isPasswordProtected();
 }
 

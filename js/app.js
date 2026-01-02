@@ -239,8 +239,8 @@ function renderCustomAPIsList() {
                 </div>
             </div>
             <div class="flex items-center">
-                <button class="text-blue-500 hover:text-blue-700 text-xs px-1" onclick="editCustomApi(${index})">✎</button>
-                <button class="text-red-500 hover:text-red-700 text-xs px-1" onclick="removeCustomApi(${index})">✕</button>
+                <button class="text-blue-500 hover:text-blue-700 text-xs px-1" onclick="editCustomApi(${index}, event)">✎</button>
+                <button class="text-red-500 hover:text-red-700 text-xs px-1" onclick="removeCustomApi(${index}, event)">✕</button>
             </div>
         `;
         container.appendChild(apiItem);
@@ -252,8 +252,14 @@ function renderCustomAPIsList() {
 }
 
 // 编辑自定义API
-function editCustomApi(index) {
+function editCustomApi(index, e) {
     if (index < 0 || index >= customAPIs.length) return;
+    
+    // 阻止事件冒泡，避免设置面板关闭
+    if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    }
     const api = customAPIs[index];
     document.getElementById('customApiName').value = api.name;
     document.getElementById('customApiUrl').value = api.url;
@@ -377,6 +383,66 @@ function selectAllAPIs(selectAll = true, excludeAdult = false) {
     checkAdultAPIsSelected();
 }
 
+// 全选/全不选/全选普通自定义API
+function selectAllCustomAPIs(selectAll = true, excludeAdult = false, e) {
+    // 阻止事件冒泡，避免设置面板关闭
+    if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    }
+    
+    const checkboxes = document.querySelectorAll('#customApisList input[type="checkbox"]');
+
+    checkboxes.forEach(checkbox => {
+        if (excludeAdult && checkbox.classList.contains('api-adult')) {
+            checkbox.checked = false;
+        } else {
+            checkbox.checked = selectAll;
+        }
+    });
+
+    updateSelectedAPIs();
+    checkAdultAPIsSelected();
+}
+
+// 全删所有自定义API
+function deleteAllCustomAPIs(e) {
+    if (customAPIs.length === 0) {
+        showToast('没有可删除的自定义API', 'warning');
+        return;
+    }
+
+    // 阻止事件冒泡，避免设置面板关闭
+    if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    }
+
+    // 确认删除
+    if (!confirm('确定要删除所有自定义API吗？此操作不可恢复。')) {
+        return;
+    }
+
+    // 清空自定义API数组
+    customAPIs = [];
+    localStorage.setItem('customAPIs', JSON.stringify(customAPIs));
+
+    // 从选中列表中移除所有自定义API
+    selectedAPIs = selectedAPIs.filter(id => !id.startsWith('custom_'));
+    localStorage.setItem('selectedAPIs', JSON.stringify(selectedAPIs));
+
+    // 重新渲染自定义API列表
+    renderCustomAPIsList();
+
+    // 更新选中的API数量
+    updateSelectedApiCount();
+
+    // 重新检查成人API选中状态
+    checkAdultAPIsSelected();
+
+    showToast('已删除所有自定义API', 'success');
+}
+
 // 显示添加自定义API表单
 function showAddCustomApiForm() {
     const form = document.getElementById('addCustomApiForm');
@@ -411,6 +477,44 @@ function showImportCustomApiForm() {
 function cancelImportCustomApiForm() {
     document.getElementById('importCustomApiForm').classList.add('hidden');
     document.getElementById('importFileInput').value = '';
+}
+
+// Base58解码功能
+const base58Chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+function base58Decode(input) {
+    let result = new Uint8Array(0);
+    
+    for (let i = 0; i < input.length; i++) {
+        const charIndex = base58Chars.indexOf(input[i]);
+        if (charIndex === -1) {
+            throw new Error('Invalid Base58 character: ' + input[i]);
+        }
+        
+        let carry = charIndex;
+        for (let j = 0; j < result.length; j++) {
+            carry += result[j] * 58;
+            result[j] = carry & 0xff;
+            carry >>= 8;
+        }
+        
+        while (carry > 0) {
+            result = new Uint8Array([...result, carry & 0xff]);
+            carry >>= 8;
+        }
+    }
+    
+    // 处理前导1
+    for (let i = 0; i < input.length && input[i] === base58Chars[0]; i++) {
+        result = new Uint8Array([0, ...result]);
+    }
+    
+    // 反转结果
+    result = new Uint8Array([...result].reverse());
+    
+    // 转换为UTF-8字符串
+    const decoder = new TextDecoder('utf-8');
+    return decoder.decode(result);
 }
 
 // 导入自定义API
@@ -495,6 +599,267 @@ function importCustomApis() {
     reader.readAsText(file);
 }
 
+// 显示URL导入API弹窗
+function showUrlImportModal() {
+    document.getElementById('urlImportModal').classList.remove('hidden');
+}
+
+// 关闭URL导入API弹窗
+function closeUrlImportModal() {
+    document.getElementById('urlImportModal').classList.add('hidden');
+    // 重置弹窗状态
+    document.getElementById('urlImportInput').value = 'https://lunatv-config.htnf.dpdns.org/?format=3&source=jin18';
+    document.getElementById('urlImportList').classList.add('hidden');
+    document.getElementById('urlImportList').innerHTML = '';
+    document.getElementById('importSelectedApiBtn').classList.add('hidden');
+}
+
+// 从URL获取API数据
+function fetchApiDataFromUrl() {
+    const urlInput = document.getElementById('urlImportInput');
+    const url = urlInput.value.trim();
+    
+    if (!url) {
+        showToast('请输入配置URL', 'warning');
+        return;
+    }
+    
+    if (!/^https?:\/\/.+/.test(url)) {
+        showToast('URL格式不正确，需以http://或https://开头', 'warning');
+        return;
+    }
+    
+    // 显示加载状态
+    const fetchBtn = document.querySelector('#urlImportModal button[onclick="fetchApiDataFromUrl()"]');
+    fetchBtn.disabled = true;
+    fetchBtn.textContent = '获取中...';
+    
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('网络请求失败');
+            }
+            return response.text();
+        })
+        .then(data => {
+            try {
+                let apiList;
+                
+                // 尝试先进行Base58解码
+                try {
+                    const decodedData = base58Decode(data);
+                    apiList = JSON.parse(decodedData);
+                } catch (decodeError) {
+                    // 如果Base58解码失败，假设数据是纯JSON格式
+                    console.log('Base58解码失败，尝试直接解析JSON:', decodeError.message);
+                    apiList = JSON.parse(data);
+                }
+                
+                console.log('apiList, ', apiList);
+                
+                // 处理对象格式的数据（如test.json）
+                let apiArray = [];
+                if (Array.isArray(apiList)) {
+                    // 原数组格式，确保每个API项都有isAdult字段
+                    apiArray = apiList.map(api => ({
+                        ...api,
+                        isAdult: api.isAdult || false
+                    }));
+                } else if (apiList && typeof apiList === 'object' && apiList.api_site) {
+                    // 对象格式，从api_site中提取数据并添加isAdult字段
+                    const apiSites = apiList.api_site;
+                    apiArray = Object.values(apiSites).map(apiSite => ({
+                        name: apiSite.name,
+                        baseUrl: apiSite.api, // 注意：test.json中是api字段，而代码中使用baseUrl
+                        detail: apiSite.detail,
+                        isAdult: apiSite.isAdult || false // 如果有isAdult字段则使用，否则默认为false
+                    }));
+                } else {
+                    throw new Error('解码后数据格式不正确，应为数组类型或包含api_site的对象');
+                }
+                
+                // 渲染API列表
+                renderUrlApiList(apiArray);
+                
+            } catch (error) {
+                showToast('数据解码或解析失败: ' + error.message, 'error');
+                console.error('数据处理错误:', error);
+            }
+        })
+        .catch(error => {
+            showToast('获取数据失败: ' + error.message, 'error');
+            console.error('网络请求错误:', error);
+        })
+        .finally(() => {
+            // 恢复按钮状态
+            fetchBtn.disabled = false;
+            fetchBtn.textContent = '获取数据';
+        });
+}
+
+// 渲染URL获取到的API列表
+function renderUrlApiList(apiList) {
+    const listContainer = document.getElementById('urlImportList');
+    listContainer.innerHTML = '';
+    
+    if (apiList.length === 0) {
+        listContainer.innerHTML = '<p class="text-gray-400">未找到API数据</p>';
+        listContainer.classList.remove('hidden');
+        return;
+    }
+    
+    // 创建列表
+    const ul = document.createElement('ul');
+    ul.className = 'space-y-2';
+    
+    apiList.forEach((api, index) => {
+        if (api.name && api.baseUrl) {
+            const li = document.createElement('li');
+            li.className = 'flex flex-col p-3 bg-[#222] rounded-lg';
+            
+            const mainRow = document.createElement('div');
+            mainRow.className = 'flex items-center';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = 'urlApi_' + index;
+            checkbox.className = 'w-4 h-4 text-blue-600 bg-[#333] border-[#444] rounded focus:ring-blue-500 focus:ring-offset-[#222]';
+            checkbox.value = JSON.stringify(api);
+            
+            const label = document.createElement('label');
+            label.htmlFor = 'urlApi_' + index;
+            const textColorClass = api.isAdult ? 'text-pink-400' : 'text-gray-300';
+            const adultTag = api.isAdult ? '<span class="text-xs text-pink-400 mr-1">(18+)</span>' : '';
+            label.className = `ml-3 text-sm font-medium ${textColorClass} flex-grow`;
+            label.innerHTML = `<div class="font-semibold">${adultTag}${api.name}</div><div class="text-xs text-gray-500">${api.baseUrl}</div>`;
+            
+            mainRow.appendChild(checkbox);
+            mainRow.appendChild(label);
+            
+            // 添加黄色资源站复选框
+            const adultCheckboxRow = document.createElement('div');
+            adultCheckboxRow.className = 'flex items-center mt-2 ml-7';
+            
+            const adultCheckbox = document.createElement('input');
+            adultCheckbox.type = 'checkbox';
+            adultCheckbox.id = 'urlApiAdult_' + index;
+            adultCheckbox.className = 'w-4 h-4 text-pink-600 bg-[#333] border-[#444] rounded focus:ring-pink-500 focus:ring-offset-[#222]';
+            adultCheckbox.checked = api.isAdult || false;
+            
+            // 监听复选框变化，更新API对象的isAdult属性
+            adultCheckbox.addEventListener('change', (e) => {
+                api.isAdult = e.target.checked;
+                // 更新主复选框的值，确保isAdult属性被保存
+                checkbox.value = JSON.stringify(api);
+                
+                // 更新标签样式
+                const newTextColorClass = e.target.checked ? 'text-pink-400' : 'text-gray-300';
+                const newAdultTag = e.target.checked ? '<span class="text-xs text-pink-400 mr-1">(18+)</span>' : '';
+                label.className = `ml-3 text-sm font-medium ${newTextColorClass} flex-grow`;
+                label.innerHTML = `<div class="font-semibold">${newAdultTag}${api.name}</div><div class="text-xs text-gray-500">${api.baseUrl}</div>`;
+            });
+            
+            const adultLabel = document.createElement('label');
+            adultLabel.htmlFor = 'urlApiAdult_' + index;
+            adultLabel.className = 'ml-2 text-xs text-pink-400';
+            adultLabel.textContent = '黄色资源站';
+            
+            adultCheckboxRow.appendChild(adultCheckbox);
+            adultCheckboxRow.appendChild(adultLabel);
+            
+            li.appendChild(mainRow);
+            li.appendChild(adultCheckboxRow);
+            ul.appendChild(li);
+        }
+    });
+    
+    listContainer.appendChild(ul);
+    listContainer.classList.remove('hidden');
+    
+    // 显示导入按钮
+    document.getElementById('importSelectedApiBtn').classList.remove('hidden');
+    
+    // 监听复选框变化，控制导入按钮状态
+    const checkboxes = ul.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateImportBtnStatus);
+    });
+}
+
+// 更新导入按钮状态
+function updateImportBtnStatus() {
+    const checkboxes = document.querySelectorAll('#urlImportList input[type="checkbox"]');
+    const hasChecked = Array.from(checkboxes).some(cb => cb.checked);
+    const importBtn = document.getElementById('importSelectedApiBtn');
+    
+    if (hasChecked) {
+        importBtn.classList.remove('hidden');
+    } else {
+        importBtn.classList.add('hidden');
+    }
+}
+
+// 导入选中的API
+function importSelectedApis() {
+    const checkboxes = document.querySelectorAll('#urlImportList input[type="checkbox"]:checked');
+    if (checkboxes.length === 0) {
+        showToast('请先选择要导入的API', 'warning');
+        return;
+    }
+    let importedCount = 0;
+    let existingCount = 0;
+    
+    checkboxes.forEach(checkbox => {
+        try {
+            const api = JSON.parse(checkbox.value);
+            if (api.name && api.baseUrl) {
+                // 检查是否已存在相同的URL
+                const exists = customAPIs.some(item => item.url === api.baseUrl);
+                if (!exists) {
+                    // 处理URL格式
+                    const { baseUrl, detail, name, isAdult = false } = api;
+                    let url = baseUrl;
+                    if (url.endsWith('/')) {
+                        url = url.slice(0, -1);
+                    }
+                    
+                    // 添加到自定义API列表
+                    customAPIs.push({ 
+                        name: name, 
+                        url: url, 
+                        detail: detail, 
+                        isAdult: isAdult
+                    });
+                    importedCount++;
+                } else {
+                    existingCount++;
+                }
+            }
+        } catch (error) {
+            console.error('解析API数据失败:', error);
+        }
+    });
+    
+    if (importedCount > 0) {
+        // 保存到localStorage
+        localStorage.setItem('customAPIs', JSON.stringify(customAPIs));
+        
+        // 重新渲染自定义API列表
+        renderCustomAPIsList();
+        updateSelectedApiCount();
+    }
+    
+    // 显示导入结果
+    let message = `成功导入 ${importedCount} 个API`;
+    if (existingCount > 0) {
+        message += `，${existingCount} 个API已存在`;
+    }
+    showToast(message, 'success');
+    
+    // 关闭弹窗
+    closeUrlImportModal();
+}
+
 // 添加自定义API
 function addCustomApi() {
     const nameInput = document.getElementById('customApiName');
@@ -536,8 +901,14 @@ function addCustomApi() {
 }
 
 // 移除自定义API
-function removeCustomApi(index) {
+function removeCustomApi(index, e) {
     if (index < 0 || index >= customAPIs.length) return;
+    
+    // 阻止事件冒泡，避免设置面板关闭
+    if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    }
 
     const apiName = customAPIs[index].name;
 
