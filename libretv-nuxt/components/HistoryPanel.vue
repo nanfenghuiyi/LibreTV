@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed left-0 top-0 h-full bg-[#111] border-r border-[#333] z-40 transform transition-transform duration-300 w-80 flex flex-col shadow-2xl"
+  <div class="fixed left-0 top-0 h-full bg-[#111] border-r border-[#333] z-40 transform transition-transform duration-300 w-[90vw] sm:w-80 flex flex-col shadow-2xl"
         :class="show ? 'translate-x-0' : '-translate-x-full'">
         
         <div class="flex justify-between items-center p-6 border-b border-[#333]">

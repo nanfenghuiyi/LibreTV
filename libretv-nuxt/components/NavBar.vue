@@ -10,35 +10,37 @@
   <nav 
     class="flex flex-col items-center justify-center transition-all duration-500 ease-in-out px-4 py-8"
   >
-    <div class="text-center mb-8">
+    <div class="text-center mb-6 sm:mb-8">
       <NuxtLink to="/" class="flex items-center justify-center mb-4 group" @click="handleHomeClick">
-         <img src="/image/logo.png" alt="Logo" class="w-10 h-10 mr-2 group-hover:scale-110 transition-transform" />
-         <h1 class="text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+         <img src="/image/logo.png" alt="Logo" class="w-8 h-8 sm:w-10 sm:h-10 mr-2 group-hover:scale-110 transition-transform" />
+         <h1 class="text-3xl sm:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
            LibreTV
          </h1>
       </NuxtLink>
-      <p class="text-gray-400">自由观影，畅享精彩</p>
+      <p class="text-xs sm:text-base text-gray-400">自由观影，畅享精彩</p>
     </div>
 
-    <div class="w-full max-w-2xl px-4">
-      <div class="flex items-stretch h-14 shadow-lg rounded-lg overflow-hidden border border-[#333]">
-        <NuxtLink to="/" class="w-20 sm:w-24 flex items-center justify-center bg-white text-black font-medium hover:bg-gray-200 transition-colors" @click="handleHomeClick">
-          首页
+    <div class="w-full max-w-2xl px-2 sm:px-4">
+      <div class="flex items-stretch h-12 sm:h-14 shadow-lg rounded-lg overflow-hidden border border-[#333]">
+        <NuxtLink to="/" class="w-16 sm:w-24 flex items-center justify-center bg-white text-black text-sm sm:text-base font-medium hover:bg-gray-200 transition-colors" @click="handleHomeClick">
+           <span class="hidden sm:inline">首页</span>
+           <svg class="w-5 h-5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
         </NuxtLink>
         <div class="flex-1 relative">
             <input
                 v-model="searchQuery"
                 @keyup.enter="handleSearch"
                 type="text"
-                class="w-full h-full bg-[#111] text-white px-6 focus:outline-none placeholder-gray-500"
-                placeholder="搜索你喜欢的视频..."
+                class="w-full h-full bg-[#111] text-white px-4 sm:px-6 focus:outline-none placeholder-gray-500 text-sm sm:text-base"
+                placeholder="搜索..."
             />
             <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
-        <button @click="handleSearch" class="w-20 sm:w-24 flex items-center justify-center bg-white text-black font-medium hover:bg-gray-200 transition-colors">
-          搜索
+        <button @click="handleSearch" class="w-16 sm:w-24 flex items-center justify-center bg-white text-black text-sm sm:text-base font-medium hover:bg-gray-200 transition-colors">
+          <span class="hidden sm:inline">搜索</span>
+          <svg class="w-5 h-5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
         </button>
       </div>
 

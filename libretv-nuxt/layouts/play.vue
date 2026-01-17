@@ -1,27 +1,27 @@
 <template>
   <div class="min-h-screen bg-[#0a0a0a] text-white font-sans flex flex-col">
     <!-- Player Header -->
-    <header class="p-4 flex items-center border-b border-[#333] gap-2 sticky top-0 bg-[#0a0a0a] z-50">
+    <header class="p-2 sm:p-4 flex items-center border-b border-[#333] gap-2 sticky top-0 bg-[#0a0a0a] z-50">
         <div class="flex items-center min-w-0">
             <NuxtLink to="/" class="flex items-center min-w-0">
-                <svg class="w-8 h-8 mr-2 text-[#ff0057]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-6 h-6 sm:w-8 sm:h-8 mr-1 sm:mr-2 text-[#ff0057] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                 </svg>
-                <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500">LibreTV</h1>
+                <h1 class="text-lg sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500 hidden xs:block">LibreTV</h1>
             </NuxtLink>
         </div>
         
-        <div class="flex-1 text-center truncate px-4">
-            <h2 id="videoTitle" class="text-lg font-semibold text-gray-200 truncate">
+        <div class="flex-1 text-center truncate px-2 sm:px-4">
+            <h2 id="videoTitle" class="text-sm sm:text-lg font-semibold text-gray-200 truncate">
                <slot name="header-title"></slot>
             </h2>
         </div>
 
-        <button @click="router.back()" class="px-4 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded-lg transition-colors flex items-center text-sm">
-            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button @click="router.back()" class="p-2 sm:px-4 sm:py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded-lg transition-colors flex items-center text-xs sm:text-sm shrink-0">
+            <svg class="w-4 h-4 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
             </svg>
-            返回
+            <span class="hidden sm:inline">返回</span>
         </button>
     </header>
 

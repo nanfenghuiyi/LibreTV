@@ -120,7 +120,7 @@ const adultBuiltin = computed(() => Object.entries(API_SITES).filter(([_, s]) =>
 </script>
 
 <template>
-  <div class="fixed right-0 top-0 h-full w-80 bg-[#111] border-l border-[#333] z-40 flex flex-col transform transition-transform duration-300 shadow-2xl"
+  <div class="fixed right-0 top-0 h-full w-[90vw] sm:w-80 bg-[#111] border-l border-[#333] z-40 flex flex-col transform transition-transform duration-300 shadow-2xl"
        :class="show ? 'translate-x-0' : 'translate-x-full'">
       
       <div class="flex justify-between items-center p-6 border-b border-[#333]">
