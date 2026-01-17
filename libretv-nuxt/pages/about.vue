@@ -1,0 +1,23 @@
+<template>
+  <div class="container mx-auto px-4 py-8 max-w-2xl text-white">
+      <h1 class="text-4xl font-bold mb-8 bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">关于 LibreTV</h1>
+      
+      <div class="space-y-6 text-gray-300 leading-relaxed">
+          <p>LibreTV 是一个免费的在线视频搜索平台，致力于为用户提供无广告、安全、便捷的观影体验。</p>
+          
+          <div class="bg-[#1a1a1a] p-6 rounded-lg border border-[#333]">
+              <h2 class="text-xl font-bold text-white mb-4">免责声明</h2>
+              <p class="mb-2">本站仅为视频搜索工具，不存储、上传或分发任何视频内容。</p>
+              <p>所有视频均来自第三方API接口。如有侵权，请联系相关内容提供方。</p>
+          </div>
+
+          <div class="bg-[#1a1a1a] p-6 rounded-lg border border-[#333]">
+              <h2 class="text-xl font-bold text-white mb-4">联系我们</h2>
+              <p>如有任何问题或建议，欢迎提交 Issue 或联系开发者。</p>
+              <div class="mt-4 flex space-x-4">
+                  <a href="https://github.com/nanfenghuiyi/LibreTV" target="_blank" class="text-blue-400 hover:text-blue-300">GitHub</a>
+              </div>
+          </div>
+      </div>
+  </div>
+</template>

@@ -1,0 +1,26 @@
+{
+  "name": "libretv-nuxt",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev --port 3376",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview --port 3376",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "artplayer": "^5.3.0",
+    "hls.js": "^1.6.15",
+    "js-sha256": "^0.11.1",
+    "nuxt": "^3.9.0",
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.0"
+  },
+  "devDependencies": {
+    "@nuxtjs/tailwindcss": "^6.10.4",
+    "sass": "^1.70.0",
+    "typescript": "^5.3.0",
+    "vue-tsc": "^3.2.2"
+  }
+}
