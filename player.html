@@ -13,6 +13,7 @@
 
     <script src="libs/tailwindcss.min.js"></script>
     <script src="js/version-check.js"></script>
+    <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/player.css">
     
@@ -219,64 +220,48 @@
     <!-- 引入纯 JS sha256（HTTP 下依然可用） -->
     <script src="libs/sha256.min.js"></script>
     <script>
-        // 保存原始 js‑sha256 实现，避免被 password.js 覆盖
         window._jsSha256 = window.sha256;
     </script>
-    
+
     <script src="libs/hls.min.js" crossorigin="anonymous"></script>
     <script src="libs/artplayer.min.js" crossorigin="anonymous"></script>
 
-    <script src="js/config.js"></script>
-    <script src="js/proxy-auth.js"></script>
-    <script src="js/customer_site.js"></script>
-    <script src="js/password.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/search.js"></script>
-    <script src="js/player.js"></script>
-
+    <!-- 环境变量注入 -->
     <script>
-        // 创建全局环境变量对象
         window.__ENV__ = window.__ENV__ || {};
-        
-        // 注入服务器端环境变量 (将由服务器端替换)
-        // PASSWORD 变量将在这里被服务器端注入
         window.__ENV__.PASSWORD = "{{PASSWORD}}";
 
         // 修复 home 跳转
         document.addEventListener('DOMContentLoaded', function() {
-            // 使用事件委托处理首页按钮点击
             document.body.addEventListener('click', function(event) {
                 const homeButton = event.target.closest('#homeButton');
                 if (homeButton) {
                     event.preventDefault();
                     event.stopPropagation();
-
-                    // 如果是在iframe中打开的，尝试关闭iframe
                     if (window.self !== window.top) {
                         try {
-                            // 尝试调用父窗口的关闭播放器函数
                             window.parent.closeVideoPlayer && window.parent.closeVideoPlayer(true);
                             return;
                         } catch (e) {
                             console.error('调用父窗口closeVideoPlayer失败:', e);
                         }
                     }
-
-                    // 多重兜底跳转
                     try {
-                            window.location.href = '/';
+                        window.location.href = '/';
                     } catch (e) {
                         try {
                             window.location.replace('/');
                         } catch (e2) {
                             window.location.assign('/');
-                    }
+                        }
                     }
                     return false;
                 }
             });
         });
     </script>
+
+    <!-- 新架构入口：ES Module -->
+    <script type="module" src="js/ui/pages/player.js"></script>
 </body>
 </html>
