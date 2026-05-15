@@ -421,6 +421,38 @@ window.copyLinks = function() {
     });
 };
 
+window.downloadVideo = function() {
+    if (!currentEpisodes.length) {
+        showToast('没有可下载的视频', 'warning');
+        return;
+    }
+    const url = currentEpisodes[currentIndex];
+    if (!url) {
+        showToast('无法获取视频链接', 'error');
+        return;
+    }
+
+    let ext = '.mp4';
+    try {
+        const pathname = new URL(url).pathname;
+        const match = pathname.match(/\.(\w+)(?:\?|$)/);
+        if (match) ext = '.' + match[1].toLowerCase();
+    } catch (e) {}
+
+    const safeName = (currentTitle || 'video').replace(/[/\\?%*:|"<>]/g, '');
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = safeName + ext;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    showToast('如果下载未开始，请检查浏览器弹窗设置后重试', 'success');
+};
+
 let controlsLocked = false;
 window.toggleControlsLock = function() {
     controlsLocked = !controlsLocked;

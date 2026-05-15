@@ -437,11 +437,22 @@ function initPlayer(videoUrl) {
         liveDurationInfinity: false
     };
 
+    // 根据 URL 后缀自动检测视频类型，避免将 mp4 当 m3u8 处理
+    function detectVideoType(url) {
+        const lowered = (url || '').toLowerCase();
+        if (/\.mp4(\?|$)/.test(lowered)) return 'video/mp4';
+        if (/\.webm(\?|$)/.test(lowered)) return 'video/webm';
+        if (/\.ogg(\?|$)/.test(lowered)) return 'video/ogg';
+        if (/\.mp3(\?|$)/.test(lowered)) return 'audio/mp3';
+        if (/\.(flv|f4v)(\?|$)/.test(lowered)) return 'flv';
+        return 'm3u8';
+    }
+
     // Create new ArtPlayer instance
     art = new Artplayer({
         container: '#player',
         url: videoUrl,
-        type: 'm3u8',
+        type: detectVideoType(videoUrl),
         title: videoTitle,
         volume: 0.8,
         isLive: false,
@@ -468,9 +479,9 @@ function initPlayer(videoUrl) {
         hotkey: false,
         theme: '#23ade5',
         lang: navigator.language.toLowerCase(),
-        moreVideoAttr: {
-            crossOrigin: 'anonymous',
-        },
+        // 不设置 crossOrigin，避免部分 CDN 因不支持 CORS 而拒绝请求。
+        // 浏览器直接访问 URL 不需要 CORS，但 crossOrigin='anonymous' 会强制要求。
+        moreVideoAttr: {},
         customType: {
             m3u8: function (video, url) {
                 // 清理之前的HLS实例
@@ -962,6 +973,37 @@ function playNextEpisode() {
     if (currentEpisodeIndex < currentEpisodes.length - 1) {
         playEpisode(currentEpisodeIndex + 1);
     }
+}
+
+// 下载视频链接
+function downloadVideo() {
+    if (!currentVideoUrl) {
+        showToast('无可下载的视频链接', 'error');
+        return;
+    }
+
+    // 尝试从 URL 中提取文件扩展名
+    let ext = '.mp4';
+    try {
+        const urlObj = new URL(currentVideoUrl);
+        const pathname = urlObj.pathname;
+        const match = pathname.match(/\.(\w+)(?:\?|$)/);
+        if (match) ext = '.' + match[1].toLowerCase();
+    } catch (e) {}
+
+    const safeName = (currentVideoTitle || 'video').replace(/[/\\?%*:|"<>]/g, '');
+
+    // 优先尝试 <a download> 触发浏览器下载，跨域时 fallback 到新窗口打开
+    const a = document.createElement('a');
+    a.href = currentVideoUrl;
+    a.download = safeName + ext;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    showToast('下载已开始，如未弹出请允许弹窗后重试', 'success');
 }
 
 // 复制播放链接
