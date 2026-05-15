@@ -21,44 +21,44 @@ export function renderSearchResults(results, containerId = 'results') {
     }
 
     const html = results.map(item => {
-        const hasCover = item.vod_pic && !item.vod_pic.includes('noimage');
+        const hasCover = item.vod_pic && item.vod_pic.startsWith('http');
+        const apiUrlAttr = item.api_url
+            ? `data-api-url="${escapeHtml(item.api_url)}"` : '';
         const sourceInfo = item.source_name
-            ? `<span class="text-xs px-2 py-0.5 rounded bg-[#222] text-gray-400 border border-[#333]">${escapeHtml(item.source_name)}</span>`
-            : '';
+            ? `<span class="bg-[#222] text-xs px-1.5 py-0.5 rounded-full">${escapeHtml(item.source_name)}</span>` : '';
 
         return `
-            <div class="bg-[#111] border border-[#333] rounded-lg overflow-hidden hover:border-white transition-all duration-300 cursor-pointer group"
+            <div class="card-hover bg-[#111] rounded-lg overflow-hidden cursor-pointer transition-all hover:scale-[1.02] h-full shadow-sm hover:shadow-md"
                  data-vod-id="${escapeHtml(item.vod_id)}"
-                 data-source="${escapeHtml(item.source_code || '')}">
-                <div class="relative aspect-[2/3] overflow-hidden bg-[#1a1a1a]">
-                    ${hasCover
-                        ? `<img src="${escapeHtml(item.vod_pic)}" alt="${escapeHtml(item.vod_name)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">`
-                        : `<div class="w-full h-full flex items-center justify-center text-gray-600">
-                             <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                                      d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                             </svg>
-                           </div>`}
-                    ${item.vod_remarks
-                        ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                             <span class="text-xs text-white">${escapeHtml(item.vod_remarks)}</span>
-                           </div>`
-                        : ''}
-                </div>
-                <div class="p-3">
-                    <h3 class="text-sm font-medium text-white line-clamp-2 mb-1" title="${escapeHtml(item.vod_name)}">
-                        ${escapeHtml(item.vod_name)}
-                    </h3>
-                    <div class="flex flex-wrap gap-1 mb-2">
-                        ${item.type_name
-                            ? `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-blue-500 text-blue-300">${escapeHtml(item.type_name)}</span>`
-                            : ''}
-                        ${item.vod_year
-                            ? `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-purple-500 text-purple-300">${escapeHtml(item.vod_year)}</span>`
-                            : ''}
-                    </div>
-                    <div class="flex justify-between items-center pt-2 border-t border-gray-800">
-                        ${sourceInfo}
+                 data-source="${escapeHtml(item.source_code || '')}"
+                 ${apiUrlAttr}>
+                <div class="flex h-full">
+                    ${hasCover ? `
+                    <div class="relative flex-shrink-0 search-card-img-container">
+                        <img src="${escapeHtml(item.vod_pic)}" alt="${escapeHtml(item.vod_name)}"
+                             class="h-full w-full object-cover transition-transform hover:scale-110"
+                             onerror="this.onerror=null; this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22450%22><rect fill=%22%231a1a1a%22 width=%22300%22 height=%22450%22/><text fill=%22%23555%22 x=%22150%22 y=%22225%22 text-anchor=%22middle%22 font-size=%2216%22>无封面</text></svg>'; this.classList.add('object-contain');"
+                             loading="lazy">
+                        <div class="absolute inset-0 bg-gradient-to-r from-black/30 to-transparent"></div>
+                    </div>` : ''}
+                    <div class="p-2 flex flex-col flex-grow">
+                        <div class="flex-grow">
+                            <h3 class="font-semibold mb-2 break-words line-clamp-2 ${hasCover ? '' : 'text-center'}" title="${escapeHtml(item.vod_name)}">${escapeHtml(item.vod_name)}</h3>
+                            <div class="flex flex-wrap ${hasCover ? '' : 'justify-center'} gap-1 mb-2">
+                                ${item.type_name
+                                    ? `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-blue-500 text-blue-300">${escapeHtml(item.type_name)}</span>`
+                                    : ''}
+                                ${item.vod_year
+                                    ? `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-purple-500 text-purple-300">${escapeHtml(item.vod_year)}</span>`
+                                    : ''}
+                            </div>
+                            <p class="text-gray-400 line-clamp-2 overflow-hidden ${hasCover ? '' : 'text-center'} mb-2">
+                                ${escapeHtml(item.vod_remarks || '暂无介绍')}
+                            </p>
+                        </div>
+                        <div class="flex justify-between items-center mt-1 pt-1 border-t border-gray-800">
+                            ${sourceInfo ? `<div>${sourceInfo}</div>` : '<div></div>'}
+                        </div>
                     </div>
                 </div>
             </div>
