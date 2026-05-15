@@ -10,6 +10,8 @@ let currentEpisodes = [];
 let currentVideoTitle = '';
 // 全局变量用于倒序状态
 let episodesReversed = false;
+// 当前搜索结果排序方式
+let currentSortOrder = localStorage.getItem('searchSortOrder') || 'name_asc';
 
 // 页面初始化
 document.addEventListener('DOMContentLoaded', function () {
@@ -56,6 +58,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 设置事件监听器
     setupEventListeners();
+
+    // 初始化排序选择器状态
+    const sortSelect = document.getElementById('sortSelect');
+    if (sortSelect) {
+        sortSelect.value = currentSortOrder;
+    }
 
     // 初始检查成人API选中状态
     setTimeout(checkAdultAPIsSelected, 100);
@@ -1121,15 +1129,8 @@ async function search() {
             }
         });
 
-        // 对搜索结果进行排序：按名称优先，名称相同时按接口源排序
-        allResults.sort((a, b) => {
-            // 首先按照视频名称排序
-            const nameCompare = (a.vod_name || '').localeCompare(b.vod_name || '');
-            if (nameCompare !== 0) return nameCompare;
-            
-            // 如果名称相同，则按照来源排序
-            return (a.source_name || '').localeCompare(b.source_name || '');
-        });
+        // 对搜索结果按当前选择的排序方式进行排序
+        sortSearchResults(allResults, currentSortOrder);
 
         // 更新搜索结果计数
         const searchResultsCount = document.getElementById('searchResultsCount');
@@ -1768,7 +1769,8 @@ async function exportConfig() {
         'yellowFilterEnabled',
         'adFilteringEnabled',
         'doubanEnabled',
-        'hasInitializedDefaults'
+        'hasInitializedDefaults',
+        'searchSortOrder'
     ];
 
     // 导出设置项
@@ -1816,6 +1818,86 @@ function saveStringAsFile(content, fileName) {
     // 清理临时对象
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
+}
+
+// 对搜索结果进行排序
+function sortSearchResults(results, sortOrder) {
+    if (!results || results.length === 0) return;
+
+    switch (sortOrder) {
+        case 'name_asc':
+            results.sort((a, b) => {
+                const cmp = (a.vod_name || '').localeCompare(b.vod_name || '');
+                return cmp !== 0 ? cmp : (a.source_name || '').localeCompare(b.source_name || '');
+            });
+            break;
+        case 'name_desc':
+            results.sort((a, b) => {
+                const cmp = (b.vod_name || '').localeCompare(a.vod_name || '');
+                return cmp !== 0 ? cmp : (a.source_name || '').localeCompare(b.source_name || '');
+            });
+            break;
+        case 'time_desc':
+            results.sort((a, b) => {
+                const timeA = new Date(a.vod_time || 0).getTime();
+                const timeB = new Date(b.vod_time || 0).getTime();
+                if (timeB !== timeA) return timeB - timeA;
+                return (a.vod_name || '').localeCompare(b.vod_name || '');
+            });
+            break;
+        case 'time_asc':
+            results.sort((a, b) => {
+                const timeA = new Date(a.vod_time || 0).getTime();
+                const timeB = new Date(b.vod_time || 0).getTime();
+                if (timeA !== timeB) return timeA - timeB;
+                return (a.vod_name || '').localeCompare(b.vod_name || '');
+            });
+            break;
+        case 'year_desc':
+            results.sort((a, b) => {
+                const yearA = parseInt(a.vod_year, 10) || 0;
+                const yearB = parseInt(b.vod_year, 10) || 0;
+                if (yearB !== yearA) return yearB - yearA;
+                return (a.vod_name || '').localeCompare(b.vod_name || '');
+            });
+            break;
+        case 'year_asc':
+            results.sort((a, b) => {
+                const yearA = parseInt(a.vod_year, 10) || 0;
+                const yearB = parseInt(b.vod_year, 10) || 0;
+                if (yearA !== yearB) return yearA - yearB;
+                return (a.vod_name || '').localeCompare(b.vod_name || '');
+            });
+            break;
+        case 'source':
+            results.sort((a, b) => {
+                const cmp = (a.source_name || '').localeCompare(b.source_name || '');
+                return cmp !== 0 ? cmp : (a.vod_name || '').localeCompare(b.vod_name || '');
+            });
+            break;
+        default:
+            results.sort((a, b) => {
+                const cmp = (a.vod_name || '').localeCompare(b.vod_name || '');
+                return cmp !== 0 ? cmp : (a.source_name || '').localeCompare(b.source_name || '');
+            });
+    }
+}
+
+// 处理排序方式切换
+function handleSortChange(sortOrder) {
+    currentSortOrder = sortOrder;
+    localStorage.setItem('searchSortOrder', sortOrder);
+
+    // 如果当前有搜索结果，重新排序并渲染
+    const resultsDiv = document.getElementById('results');
+    if (resultsDiv && resultsDiv.children.length > 0) {
+        // 从当前DOM中无法直接恢复原始数据，需要重新搜索
+        // 这里采用更简单的方式：如果搜索框有内容，触发重新搜索
+        const query = document.getElementById('searchInput').value.trim();
+        if (query) {
+            search();
+        }
+    }
 }
 
 // 移除Node.js的require语句，因为这是在浏览器环境中运行的
