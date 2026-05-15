@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(node --check js/ui/components/password-modal.js)",
-      "Bash(node --check js/ui/pages/home.js)"
+      "Bash(node --check js/ui/pages/home.js)",
+      "Bash(git ls-tree *)"
     ]
   }
 }

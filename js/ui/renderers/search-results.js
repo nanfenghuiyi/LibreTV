@@ -23,7 +23,7 @@ export function renderSearchResults(results, containerId = 'results') {
     const html = results.map(item => {
         const hasCover = item.vod_pic && !item.vod_pic.includes('noimage');
         const sourceInfo = item.source_name
-            ? `<span class="text-[10px] px-1.5 py-0 rounded bg-[#222] text-gray-400 border border-[#333]">${escapeHtml(item.source_name)}</span>`
+            ? `<span class="text-xs px-2 py-0.5 rounded bg-[#222] text-gray-400 border border-[#333]">${escapeHtml(item.source_name)}</span>`
             : '';
 
         return `
@@ -34,30 +34,30 @@ export function renderSearchResults(results, containerId = 'results') {
                     ${hasCover
                         ? `<img src="${escapeHtml(item.vod_pic)}" alt="${escapeHtml(item.vod_name)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">`
                         : `<div class="w-full h-full flex items-center justify-center text-gray-600">
-                             <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                       d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
                              </svg>
                            </div>`}
                     ${item.vod_remarks
-                        ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5">
-                             <span class="text-[10px] text-white">${escapeHtml(item.vod_remarks)}</span>
+                        ? `<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                             <span class="text-xs text-white">${escapeHtml(item.vod_remarks)}</span>
                            </div>`
                         : ''}
                 </div>
-                <div class="p-2">
-                    <h3 class="text-xs font-medium text-white line-clamp-2 mb-0.5" title="${escapeHtml(item.vod_name)}">
+                <div class="p-3">
+                    <h3 class="text-sm font-medium text-white line-clamp-2 mb-1" title="${escapeHtml(item.vod_name)}">
                         ${escapeHtml(item.vod_name)}
                     </h3>
-                    <div class="flex flex-wrap gap-0.5 mb-1">
+                    <div class="flex flex-wrap gap-1 mb-2">
                         ${item.type_name
-                            ? `<span class="text-[10px] py-0 px-1 rounded bg-opacity-20 bg-blue-500 text-blue-300">${escapeHtml(item.type_name)}</span>`
+                            ? `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-blue-500 text-blue-300">${escapeHtml(item.type_name)}</span>`
                             : ''}
                         ${item.vod_year
-                            ? `<span class="text-[10px] py-0 px-1 rounded bg-opacity-20 bg-purple-500 text-purple-300">${escapeHtml(item.vod_year)}</span>`
+                            ? `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-purple-500 text-purple-300">${escapeHtml(item.vod_year)}</span>`
                             : ''}
                     </div>
-                    <div class="flex justify-between items-center pt-1 border-t border-gray-800">
+                    <div class="flex justify-between items-center pt-2 border-t border-gray-800">
                         ${sourceInfo}
                     </div>
                 </div>
