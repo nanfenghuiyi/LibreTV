@@ -76,7 +76,14 @@ export async function fetchJson(targetUrl, options = {}, timeoutMs = 10000) {
         },
         ...options
     }, timeoutMs);
-    return response.json();
+
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch {
+        // API 返回了非 JSON 数据（如 "暂不支持搜索"）
+        throw new Error(`API 返回非 JSON: ${text.substring(0, 100)}`);
+    }
 }
 
 /**
