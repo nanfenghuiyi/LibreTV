@@ -142,19 +142,6 @@ function initEventListeners() {
         }
     });
 
-    // 面板切换
-    const settingsBtn = document.querySelector('button[aria-label="打开设置"]');
-    if (settingsBtn) settingsBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        togglePanel('settingsPanel');
-    });
-
-    const historyBtn = document.querySelector('button[aria-label="观看历史"]');
-    if (historyBtn) historyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        togglePanel('historyPanel');
-    });
-
     // 点击外部关闭面板
     document.addEventListener('click', (e) => {
         const settingsPanel = $('settingsPanel');
