@@ -22,6 +22,10 @@ import { fetchHot } from '../../api/douban-client.js';
 let currentQuery = '';
 let currentTypeFilter = '';
 
+// 挂载到 window 供内联 onclick 使用
+window.LibreTV = window.LibreTV || {};
+window.LibreTV.openDetail = openDetail;
+
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
     initPasswordProtection();
@@ -170,13 +174,6 @@ function initEventListeners() {
     eventBus.on(Events.SEARCH_ERROR, ({ error }) => {
         hideLoading();
         showToast(error.message || '搜索失败', 'error');
-    });
-
-    // 结果卡片点击 - 事件委托
-    delegate('results', '[data-vod-id]', 'click', (e, target) => {
-        const vodId = target.dataset.vodId;
-        const source = target.closest('[data-vod-id]').dataset.source;
-        if (vodId) openDetail(vodId, source);
     });
 
     // 分类筛选 - 事件委托

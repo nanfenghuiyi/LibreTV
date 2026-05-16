@@ -31,7 +31,8 @@ export function renderSearchResults(results, containerId = 'results') {
             <div class="card-hover bg-[#111] rounded-lg overflow-hidden cursor-pointer transition-all hover:scale-[1.02] h-full shadow-sm hover:shadow-md"
                  data-vod-id="${escapeHtml(item.vod_id)}"
                  data-source="${escapeHtml(item.source_code || '')}"
-                 ${apiUrlAttr}>
+                 ${apiUrlAttr}
+                 onclick="var d=this.dataset;d.vodId&amp;&amp;LibreTV.openDetail(d.vodId,d.source)">
                 <div class="flex h-full">
                     ${hasCover ? `
                     <div class="relative flex-shrink-0 search-card-img-container">
