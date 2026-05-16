@@ -15,7 +15,9 @@ function showNext() {
     let toast = document.getElementById('toast');
     let toastMessage = document.getElementById('toastMessage');
 
-    if (!toast) {
+    // 重新创建 toast 如果结构不完整
+    if (!toast || !toastMessage) {
+        if (toast) toast.remove();
         toast = document.createElement('div');
         toast.id = 'toast';
         toast.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%) translateY(-100%);z-index:2147483647;opacity:0;transition:all 0.3s ease;';

@@ -281,9 +281,17 @@ async function switchResource(sourceKey, vodId) {
 }
 
 function showError(message) {
+    const loadingEl = $('player-loading');
+    if (loadingEl) loadingEl.style.display = 'none';
+    hideLoading();
+
     const errorEl = $('error');
     const msgEl = $('error-message');
-    if (errorEl) errorEl.style.display = 'flex';
+    if (errorEl) {
+        errorEl.style.display = 'flex';
+        errorEl.style.alignItems = 'center';
+        errorEl.style.justifyContent = 'center';
+    }
     if (msgEl) msgEl.textContent = message;
 }
 
