@@ -25,6 +25,50 @@ let currentTypeFilter = '';
 // 挂载到 window 供内联 onclick 使用
 window.LibreTV = window.LibreTV || {};
 window.LibreTV.openDetail = openDetail;
+window.LibreTV.toggleDetailEpisodeOrder = function() {
+    window.__detailReversed = !window.__detailReversed;
+    if (window.__currentDetail) {
+        const { episodes, videoInfo } = window.__currentDetail;
+        const reversed = window.__detailReversed;
+        const sortedEpisodes = reversed ? [...episodes].reverse() : episodes;
+
+        const items = sortedEpisodes.map((url, i) => {
+            const realIndex = reversed ? episodes.length - 1 - i : i;
+            return `<div class="episode-item cursor-pointer p-3 bg-[#1a1a1a] rounded hover:bg-[#222] transition-colors border border-transparent hover:border-[#444]"
+                         data-index="${realIndex}" data-url="${escapeHtml(url)}">
+                        <span class="text-sm text-gray-300">第 ${realIndex + 1} 集</span>
+                    </div>`;
+        }).join('');
+
+        const grid = document.getElementById('episodesGrid');
+        if (grid) grid.innerHTML = items;
+
+        const orderText = document.getElementById('detailOrderText');
+        const orderIcon = document.getElementById('detailOrderIcon');
+        if (orderText) orderText.textContent = reversed ? '正序排列' : '倒序排列';
+        if (orderIcon) orderIcon.style.transform = reversed ? 'rotate(180deg)' : '';
+
+        // 重新绑定点击
+        setTimeout(() => {
+            document.querySelectorAll('.episode-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    const idx = parseInt(el.dataset.index, 10);
+                    playVideo(videoInfo.title, videoInfo.source_code || '', episodes, idx);
+                });
+            });
+        }, 0);
+    }
+};
+window.LibreTV.copyEpisodeLinks = function() {
+    if (window.__currentDetail?.episodes) {
+        const text = window.__currentDetail.episodes.join('\n');
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('播放链接已复制到剪贴板', 'success');
+        }).catch(() => {
+            showToast('复制失败', 'error');
+        });
+    }
+};
 
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
@@ -235,8 +279,13 @@ async function openDetail(vodId, source) {
             return;
         }
 
-        setModalTitle(data.videoInfo.title || '视频详情');
-        renderEpisodeList(data.episodes, data.videoInfo);
+        const title = data.videoInfo.title || vodId;
+        const sourceName = data.videoInfo.source_name
+            ? ` <span class="text-sm font-normal text-gray-400">(${escapeHtml(data.videoInfo.source_name)})</span>` : '';
+
+        setModalTitle(`<span class="break-words">${escapeHtml(title)}</span>${sourceName}`);
+
+        renderDetailModal(data.episodes, data.videoInfo);
         openModal('modal');
     } catch (error) {
         hideLoading();
@@ -245,8 +294,33 @@ async function openDetail(vodId, source) {
     }
 }
 
-function renderEpisodeList(episodes, videoInfo) {
-    const html = episodes.map((url, index) => `
+function renderDetailModal(episodes, videoInfo) {
+    const info = videoInfo || {};
+
+    // 详情信息网格
+    const hasGridContent = info.type || info.year || info.area || info.director || info.actor || info.remarks;
+    const descText = info.desc ? info.desc.replace(/<[^>]+>/g, '').trim() : '';
+
+    let detailHtml = '';
+    if (hasGridContent || descText) {
+        const gridItems = [
+            info.type ? `<div class="detail-item"><span class="detail-label">类型:</span> <span class="detail-value">${escapeHtml(info.type)}</span></div>` : '',
+            info.year ? `<div class="detail-item"><span class="detail-label">年份:</span> <span class="detail-value">${escapeHtml(String(info.year))}</span></div>` : '',
+            info.area ? `<div class="detail-item"><span class="detail-label">地区:</span> <span class="detail-value">${escapeHtml(info.area)}</span></div>` : '',
+            info.director ? `<div class="detail-item"><span class="detail-label">导演:</span> <span class="detail-value">${escapeHtml(info.director)}</span></div>` : '',
+            info.actor ? `<div class="detail-item"><span class="detail-label">主演:</span> <span class="detail-value">${escapeHtml(info.actor)}</span></div>` : '',
+            info.remarks ? `<div class="detail-item"><span class="detail-label">备注:</span> <span class="detail-value">${escapeHtml(info.remarks)}</span></div>` : ''
+        ].filter(Boolean).join('');
+
+        detailHtml = `
+            <div class="modal-detail-info">
+                ${hasGridContent ? `<div class="detail-grid">${gridItems}</div>` : ''}
+                ${descText ? `<div class="detail-desc"><p class="detail-label">简介:</p><p class="detail-desc-content">${escapeHtml(descText)}</p></div>` : ''}
+            </div>`;
+    }
+
+    // 集数按钮
+    const episodeItems = episodes.map((url, index) => `
         <div class="episode-item cursor-pointer p-3 bg-[#1a1a1a] rounded hover:bg-[#222] transition-colors border border-transparent hover:border-[#444]"
              data-index="${index}" data-url="${escapeHtml(url)}">
             <span class="text-sm text-gray-300">第 ${index + 1} 集</span>
@@ -254,10 +328,30 @@ function renderEpisodeList(episodes, videoInfo) {
     `).join('');
 
     setModalContent(`
-        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-            ${html}
+        ${detailHtml}
+        <div class="flex flex-wrap items-center justify-between mb-4 gap-2">
+            <div class="flex items-center gap-2">
+                <button onclick="LibreTV.toggleDetailEpisodeOrder()"
+                        class="px-3 py-1.5 bg-[#333] hover:bg-[#444] border border-[#444] rounded text-sm transition-colors flex items-center gap-1">
+                    <svg class="w-4 h-4" id="detailOrderIcon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                    </svg>
+                    <span id="detailOrderText">倒序排列</span>
+                </button>
+                <span class="text-gray-400 text-sm">共 ${episodes.length} 集</span>
+            </div>
+            <button onclick="LibreTV.copyEpisodeLinks()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors">
+                复制链接
+            </button>
+        </div>
+        <div id="episodesGrid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+            ${episodeItems}
         </div>
     `);
+
+    // 存储当前请求数据供倒序和播放使用
+    window.__currentDetail = { episodes, videoInfo };
+    window.__detailReversed = false;
 
     // 绑定集数点击
     setTimeout(() => {

@@ -31,7 +31,7 @@ export function closeModal(id) {
  */
 export function setModalTitle(title) {
     const el = $('modalTitle');
-    if (el) el.textContent = title;
+    if (el) el.innerHTML = title;
 }
 
 /**
