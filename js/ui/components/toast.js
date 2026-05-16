@@ -26,6 +26,12 @@ function showNext() {
         toast.appendChild(toastMessage);
         document.body.appendChild(toast);
     }
+    // 确保定位通过 inline style 设置，避免 className 覆盖 Tailwind 定位类
+    toast.style.position = 'fixed';
+    toast.style.top = '16px';
+    toast.style.left = '50%';
+    toast.style.zIndex = '2147483647';
+    toast.style.transition = 'all 0.3s ease';
 
     const bgColors = {
         error: 'bg-red-500',

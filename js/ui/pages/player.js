@@ -64,11 +64,22 @@ function initPlayer() {
 
     const videoUrl = currentEpisodes[currentIndex];
 
+    // 根据 URL 后缀自动检测视频类型
+    function detectVideoType(url) {
+        const lowered = (url || '').toLowerCase();
+        if (/\.mp4(\?|$)/.test(lowered)) return 'video/mp4';
+        if (/\.webm(\?|$)/.test(lowered)) return 'video/webm';
+        if (/\.ogg(\?|$)/.test(lowered)) return 'video/ogg';
+        if (/\.mp3(\?|$)/.test(lowered)) return 'audio/mp3';
+        if (/\.(flv|f4v)(\?|$)/.test(lowered)) return 'flv';
+        return 'm3u8';
+    }
+
     try {
         player = new Artplayer({
             container: container,
             url: videoUrl,
-            type: 'm3u8',
+            type: detectVideoType(videoUrl),
             autoplay: settingsService.getSetting(StorageKeys.AUTOPLAY_ENABLED, true),
             fullscreen: true,
             fullscreenWeb: true,
