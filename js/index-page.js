@@ -2,16 +2,18 @@
 document.addEventListener('DOMContentLoaded', function() {
     // 弹窗显示脚本
     // 检查用户是否已经看过声明
-    const hasSeenDisclaimer = localStorage.getItem('hasSeenDisclaimer');
-    
+    // 使用 ltv: 前缀 key 与新存储架构兼容
+    const hasSeenDisclaimer = localStorage.getItem('ltv:hasSeenDisclaimer') || localStorage.getItem('hasSeenDisclaimer');
+
     if (!hasSeenDisclaimer) {
         // 显示弹窗
         const disclaimerModal = document.getElementById('disclaimerModal');
         disclaimerModal.style.display = 'flex';
-        
+
         // 添加接受按钮事件
         document.getElementById('acceptDisclaimerBtn').addEventListener('click', function() {
-            // 保存用户已看过声明的状态
+            // 写入新旧两种 key 确保兼容
+            localStorage.setItem('ltv:hasSeenDisclaimer', 'true');
             localStorage.setItem('hasSeenDisclaimer', 'true');
             // 隐藏弹窗
             disclaimerModal.style.display = 'none';
@@ -55,26 +57,5 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // 也检查查询字符串中的搜索参数 (格式: ?s=keyword)
-    const urlParams = new URLSearchParams(window.location.search);
-    const searchQuery = urlParams.get('s');
-    
-    if (searchQuery) {
-        // 设置搜索框的值
-        document.getElementById('searchInput').value = searchQuery;
-        // 执行搜索
-        setTimeout(() => {
-            search();
-            // 更新URL为规范格式
-            try {
-                window.history.replaceState(
-                    { search: searchQuery }, 
-                    `搜索: ${searchQuery} - LibreTV`, 
-                    `/s=${encodeURIComponent(searchQuery)}`
-                );
-            } catch (e) {
-                console.error('更新浏览器历史失败:', e);
-            }
-        }, 300);
-    }
+    // 查询字符串搜索参数由 home.js 的 initSearchFromUrl() 统一处理，此处不再重复
 });

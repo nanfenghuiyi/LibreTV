@@ -7,7 +7,10 @@
       "Bash(grep -E \"\\\\.js$|\\\\.html$\")",
       "Bash(git show *)",
       "Read(//tmp/**)",
-      "Bash(grep -n \"function.*[Ss]earch\\\\|vod_pic\\\\|vod_name\\\\|renderResult\\\\|renderCard\\\\|innerHTML.*card\\\\|\\\\$\\('#results'\\)\\\\|\\\\.results\\\\b\" /tmp/index_pre_refactor.html)"
+      "Bash(grep -n \"function.*[Ss]earch\\\\|vod_pic\\\\|vod_name\\\\|renderResult\\\\|renderCard\\\\|innerHTML.*card\\\\|\\\\$\\('#results'\\)\\\\|\\\\.results\\\\b\" /tmp/index_pre_refactor.html)",
+      "Bash(node -e ' *)",
+      "Bash(npm start *)",
+      "Bash(curl -s http://localhost:8080/)"
     ]
   }
 }

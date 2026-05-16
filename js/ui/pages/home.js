@@ -526,6 +526,7 @@ function initSearchFromUrl() {
     if (keyword) {
         const input = $('searchInput');
         if (input) input.value = keyword;
+        toggleClearButton();
         handleSearch();
     }
 }
@@ -651,8 +652,12 @@ function showDisclaimerModal() {
             </div>
         `;
         document.body.appendChild(modal);
-
-        $('acceptDisclaimerBtn').addEventListener('click', () => {
+    }
+    // 绑定接受按钮事件（无论动态创建还是 HTML 中已存在）
+    const acceptBtn = $('acceptDisclaimerBtn');
+    if (acceptBtn && !acceptBtn._disclaimerBound) {
+        acceptBtn._disclaimerBound = true;
+        acceptBtn.addEventListener('click', () => {
             storage.set(StorageKeys.HAS_SEEN_DISCLAIMER, true);
             modal.classList.add('hidden');
             modal.classList.remove('flex');
