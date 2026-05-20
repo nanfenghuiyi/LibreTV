@@ -995,7 +995,7 @@ function copyLinks() {
 }
 
 // 下载视频
-function downloadVideo() {
+async function downloadVideo() {
     const urlParams = new URLSearchParams(window.location.search);
     let videoUrl = urlParams.get('url') || '';
     
@@ -1012,15 +1012,32 @@ function downloadVideo() {
     const episodeText = currentEpisodes.length > 0 ? `第${currentEpisodeIndex + 1}集` : '';
     const fileName = episodeText ? `${videoTitle}_${episodeText}` : videoTitle;
     
-    const a = document.createElement('a');
-    a.href = videoUrl;
-    a.download = fileName;
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    
-    showToast('下载已开始', 'success');
+    try {
+        const proxyUrl = convertToProxyUrl(videoUrl);
+        showToast('正在准备下载...', 'info');
+        
+        const response = await fetch(proxyUrl);
+        if (!response.ok) {
+            throw new Error(`下载失败: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        showToast('下载已开始', 'success');
+    } catch (error) {
+        console.error('下载失败:', error);
+        window.open(videoUrl, '_blank');
+        showToast('已在新标签页打开，请右键另存为', 'info');
+    }
 }
 
 // 切换集数排序
