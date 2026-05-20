@@ -31,7 +31,7 @@ export async function executeSearch(query, source = null) {
         } else {
             // 聚合搜索：获取选中的源
             const selectedAPIs = settingsService.getSelectedAPIs();
-            const customAPIs = settingsService.getCustomAPIs().filter(api => api.selected);
+            const allCustomAPIs = settingsService.getCustomAPIs();
 
             const promises = [];
 
@@ -47,14 +47,17 @@ export async function executeSearch(query, source = null) {
                 }
             });
 
-            // 自定义源
-            customAPIs.forEach(api => {
-                promises.push(
-                    search(currentQuery, 'custom', api.url).catch(err => {
-                        console.warn('自定义源搜索失败:', err);
-                        return { code: 200, list: [] };
-                    })
-                );
+            // 自定义源：通过 selectedAPIs 中的 custom_X key 判断是否选中
+            allCustomAPIs.forEach((api, index) => {
+                const customKey = `custom_${index}`;
+                if (selectedAPIs.includes(customKey)) {
+                    promises.push(
+                        search(currentQuery, 'custom', api.url, api.name || '自定义源').catch(err => {
+                            console.warn('自定义源搜索失败:', err);
+                            return { code: 200, list: [] };
+                        })
+                    );
+                }
             });
 
             const results = await Promise.all(promises);

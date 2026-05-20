@@ -580,12 +580,23 @@ function renderSearchHistory() {
         return;
     }
 
-    container.innerHTML = history.map(q => `
+    let html = `
+        <div class="flex justify-between items-center w-full mb-2">
+            <span class="text-gray-500 text-xs">最近搜索:</span>
+            <button id="clearHistoryBtn" class="text-gray-500 hover:text-white transition-colors text-xs"
+                    aria-label="清除搜索历史">
+                清除
+            </button>
+        </div>
+    `;
+    html += history.map(q => `
         <button class="search-history-tag px-3 py-1 text-xs rounded-full bg-[#222] text-gray-400 border border-[#333] hover:border-white hover:text-white transition-colors"
                 data-query="${escapeHtml(q)}">
             ${escapeHtml(q)}
         </button>
     `).join('');
+
+    container.innerHTML = html;
 
     container.querySelectorAll('.search-history-tag').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -594,6 +605,19 @@ function renderSearchHistory() {
             handleSearch();
         });
     });
+
+    const clearBtn = container.querySelector('#clearHistoryBtn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            clearSearchHistory();
+        });
+    }
+}
+
+function clearSearchHistory() {
+    storage.remove(StorageKeys.SEARCH_HISTORY);
+    renderSearchHistory();
+    showToast('搜索历史已清除', 'success');
 }
 
 // ==================== 配置导入/导出 ====================

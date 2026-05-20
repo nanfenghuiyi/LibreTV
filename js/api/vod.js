@@ -17,8 +17,9 @@ import {
  * @param {string} query - 搜索关键词
  * @param {string} source - 源代码
  * @param {string} [customApi] - 自定义API地址
+ * @param {string} [customSourceName] - 自定义源名称
  */
-export async function search(query, source, customApi = '') {
+export async function search(query, source, customApi = '', customSourceName = '') {
     try {
         if (!query) throw new Error('缺少搜索参数');
         if (source === 'custom' && !customApi) throw new Error('使用自定义API时必须提供API地址');
@@ -34,7 +35,9 @@ export async function search(query, source, customApi = '') {
             throw new Error('API返回的数据格式无效');
         }
 
-        const sourceName = source === 'custom' ? '自定义源' : API_SITES[source].name;
+        const sourceName = source === 'custom'
+            ? (customSourceName || '自定义源')
+            : API_SITES[source].name;
         const results = formatSearchResults(data.list, source, sourceName, customApi || null);
 
         return { code: 200, list: results };
