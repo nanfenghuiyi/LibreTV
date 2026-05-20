@@ -402,9 +402,6 @@ function initPlayer(videoUrl) {
         return
     }
 
-    // 将视频 URL 转换为代理 URL
-    const proxyVideoUrl = convertToProxyUrl(videoUrl);
-
     // 销毁旧实例
     if (art) {
         art.destroy();
@@ -443,7 +440,7 @@ function initPlayer(videoUrl) {
     // Create new ArtPlayer instance
     art = new Artplayer({
         container: '#player',
-        url: proxyVideoUrl,
+        url: videoUrl,
         type: 'm3u8',
         title: videoTitle,
         volume: 0.8,
@@ -512,7 +509,7 @@ function initPlayer(videoUrl) {
                     }
                 });
 
-                hls.loadSource(proxyVideoUrl);
+                hls.loadSource(url);
                 hls.attachMedia(video);
 
                 // enable airplay, from https://github.com/video-dev/hls.js/issues/5989
@@ -520,11 +517,11 @@ function initPlayer(videoUrl) {
                 let sourceElement = video.querySelector('source');
                 if (sourceElement) {
                     // 更新现有source元素的URL
-                    sourceElement.src = proxyVideoUrl;
+                    sourceElement.src = videoUrl;
                 } else {
                     // 创建新的source元素
                     sourceElement = document.createElement('source');
-                    sourceElement.src = proxyVideoUrl;
+                    sourceElement.src = videoUrl;
                     video.appendChild(sourceElement);
                 }
                 video.disableRemotePlayback = false;
@@ -967,86 +964,44 @@ function playNextEpisode() {
     }
 }
 
-// 将视频 URL 转换为代理 URL 格式
-function convertToProxyUrl(url) {
-    if (!url || typeof url !== 'string') return url;
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-        return `/proxy/${encodeURIComponent(url)}`;
-    }
-    return url;
-}
-
 // 复制播放链接
 function copyLinks() {
+    // 尝试从URL中获取参数
     const urlParams = new URLSearchParams(window.location.search);
-    let linkUrl = urlParams.get('url') || '';
-    if (!linkUrl && currentVideoUrl) {
-        linkUrl = currentVideoUrl;
-    }
+    const linkUrl = urlParams.get('url') || '';
     if (linkUrl !== '') {
         navigator.clipboard.writeText(linkUrl).then(() => {
             showToast('播放链接已复制', 'success');
         }).catch(err => {
             showToast('复制失败，请检查浏览器权限', 'error');
         });
-    } else {
-        showToast('无法获取播放链接', 'error');
     }
 }
 
 // 下载视频
-async function downloadVideo() {
+function downloadVideo() {
     const urlParams = new URLSearchParams(window.location.search);
-    let videoUrl = urlParams.get('url') || '';
-    
-    if (!videoUrl && currentVideoUrl) {
-        videoUrl = currentVideoUrl;
-    }
+    const videoUrl = urlParams.get('url') || '';
     
     if (!videoUrl) {
         showToast('视频链接不存在', 'error');
         return;
     }
     
-    // 与播放器保持一致，使用代理URL
-    const proxyUrl = convertToProxyUrl(videoUrl);
-    
     const videoTitle = currentVideoTitle || '视频';
     const episodeText = currentEpisodes.length > 0 ? `第${currentEpisodeIndex + 1}集` : '';
     const fileName = episodeText ? `${videoTitle}_${episodeText}` : videoTitle;
     
-    // m3u8和普通视频统一使用fetch下载
-    try {
-        showToast('正在准备下载...', 'info');
-        
-        const response = await fetch(proxyUrl);
-        if (!response.ok) {
-            throw new Error(`下载失败: ${response.status}`);
-        }
-        
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        
-        // 延迟释放blob URL
-        setTimeout(() => {
-            URL.revokeObjectURL(blobUrl);
-        }, 1000);
-        
-        const fileType = videoUrl.includes('.m3u8') ? 'm3u8索引文件' : '视频';
-        showToast(`${fileType}下载已开始`, 'success');
-    } catch (error) {
-        console.error('下载失败:', error);
-        // 降级方案：在新标签页打开代理链接
-        window.open(proxyUrl, '_blank');
-        showToast('已在新标签页打开视频，请右键另存为', 'info');
-    }
+    const a = document.createElement('a');
+    a.href = videoUrl;
+    a.download = fileName;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    showToast('视频下载已开始', 'success');
 }
 
 // 切换集数排序
