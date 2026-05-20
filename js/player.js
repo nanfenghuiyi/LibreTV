@@ -397,13 +397,14 @@ function showShortcutHint(text, direction) {
 }
 
 // 初始化播放器
-function initPlayer(videoUrl) {
+// 异步初始化播放器（支持鉴权）
+async function initPlayer(videoUrl) {
     if (!videoUrl) {
         return
     }
 
-    // 将视频 URL 转换为代理 URL
-    const proxyVideoUrl = convertToProxyUrl(videoUrl);
+    // 将视频 URL 转换为带鉴权的代理 URL
+    const proxyVideoUrl = await convertToProxyUrlWithAuth(videoUrl);
 
     // 销毁旧实例
     if (art) {
@@ -967,11 +968,25 @@ function playNextEpisode() {
     }
 }
 
-// 将视频 URL 转换为代理 URL 格式
+// 将视频 URL 转换为代理 URL 格式（同步版本，不带鉴权）
 function convertToProxyUrl(url) {
     if (!url || typeof url !== 'string') return url;
     if (url.startsWith('http://') || url.startsWith('https://')) {
         return `/proxy/${encodeURIComponent(url)}`;
+    }
+    return url;
+}
+
+// 将视频 URL 转换为带鉴权的代理 URL（异步版本）
+async function convertToProxyUrlWithAuth(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+        const proxyUrl = `/proxy/${encodeURIComponent(url)}`;
+        // 使用 ProxyAuth 添加鉴权参数
+        if (window.ProxyAuth && window.ProxyAuth.addAuthToProxyUrl) {
+            return await window.ProxyAuth.addAuthToProxyUrl(proxyUrl);
+        }
+        return proxyUrl;
     }
     return url;
 }
@@ -1013,7 +1028,7 @@ async function downloadVideo() {
     const fileName = episodeText ? `${videoTitle}_${episodeText}` : videoTitle;
     
     try {
-        const proxyUrl = convertToProxyUrl(videoUrl);
+        const proxyUrl = await convertToProxyUrlWithAuth(videoUrl);
         showToast('正在准备下载...', 'info');
         
         const response = await fetch(proxyUrl);
