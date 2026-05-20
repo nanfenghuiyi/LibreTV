@@ -978,22 +978,30 @@ function convertToProxyUrl(url) {
 
 // 复制播放链接
 function copyLinks() {
-    // 尝试从URL中获取参数
     const urlParams = new URLSearchParams(window.location.search);
-    const linkUrl = urlParams.get('url') || '';
+    let linkUrl = urlParams.get('url') || '';
+    if (!linkUrl && currentVideoUrl) {
+        linkUrl = currentVideoUrl;
+    }
     if (linkUrl !== '') {
         navigator.clipboard.writeText(linkUrl).then(() => {
             showToast('播放链接已复制', 'success');
         }).catch(err => {
             showToast('复制失败，请检查浏览器权限', 'error');
         });
+    } else {
+        showToast('无法获取播放链接', 'error');
     }
 }
 
 // 下载视频
 function downloadVideo() {
     const urlParams = new URLSearchParams(window.location.search);
-    const videoUrl = urlParams.get('url') || '';
+    let videoUrl = urlParams.get('url') || '';
+    
+    if (!videoUrl && currentVideoUrl) {
+        videoUrl = currentVideoUrl;
+    }
     
     if (!videoUrl) {
         showToast('视频链接不存在', 'error');
