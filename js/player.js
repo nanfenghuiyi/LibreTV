@@ -978,6 +978,32 @@ function copyLinks() {
     }
 }
 
+// 下载视频
+function downloadVideo() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const videoUrl = urlParams.get('url') || '';
+    
+    if (!videoUrl) {
+        showToast('视频链接不存在', 'error');
+        return;
+    }
+    
+    const videoTitle = currentVideoTitle || '视频';
+    const episodeText = currentEpisodes.length > 0 ? `第${currentEpisodeIndex + 1}集` : '';
+    const fileName = episodeText ? `${videoTitle}_${episodeText}` : videoTitle;
+    
+    const a = document.createElement('a');
+    a.href = videoUrl;
+    a.download = fileName;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    showToast('视频下载已开始', 'success');
+}
+
 // 切换集数排序
 function toggleEpisodeOrder() {
     episodesReversed = !episodesReversed;
