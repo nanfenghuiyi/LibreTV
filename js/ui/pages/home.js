@@ -1018,74 +1018,6 @@ function closeUrlImportModal() {
     if (importBtn) importBtn.classList.add('hidden');
 }
 
-function fetchApiDataFromUrl() {
-    const urlInput = $('urlImportInput');
-    const url = urlInput?.value.trim();
-
-    if (!url) {
-        showToast('请输入配置URL', 'warning');
-        return;
-    }
-    if (!/^https?:\/\/.+/.test(url)) {
-        showToast('URL格式不正确，需以http://或https://开头', 'warning');
-        return;
-    }
-
-    const fetchBtn = document.querySelector('#urlImportModal button[onclick="fetchApiDataFromUrl()"]');
-    if (fetchBtn) {
-        fetchBtn.disabled = true;
-        fetchBtn.textContent = '获取中...';
-    }
-
-    fetch(url)
-        .then(response => {
-            if (!response.ok) throw new Error('网络请求失败');
-            return response.text();
-        })
-        .then(data => {
-            try {
-                let apiList;
-                try {
-                    const decodedData = base58Decode(data);
-                    apiList = JSON.parse(decodedData);
-                } catch (decodeError) {
-                    console.log('Base58解码失败，尝试直接解析JSON:', decodeError.message);
-                    apiList = JSON.parse(data);
-                }
-
-                let apiArray = [];
-                if (Array.isArray(apiList)) {
-                    apiArray = apiList.map(api => ({ ...api, isAdult: api.isAdult || false }));
-                } else if (apiList && typeof apiList === 'object' && apiList.api_site) {
-                    const apiSites = apiList.api_site;
-                    apiArray = Object.values(apiSites).map(apiSite => ({
-                        name: apiSite.name,
-                        baseUrl: apiSite.api,
-                        detail: apiSite.detail,
-                        isAdult: apiSite.isAdult || false
-                    }));
-                } else {
-                    throw new Error('解码后数据格式不正确，应为数组类型或包含api_site的对象');
-                }
-
-                renderUrlApiList(apiArray);
-            } catch (error) {
-                showToast('数据解码或解析失败: ' + error.message, 'error');
-                console.error('数据处理错误:', error);
-            }
-        })
-        .catch(error => {
-            showToast('获取数据失败: ' + error.message, 'error');
-            console.error('网络请求错误:', error);
-        })
-        .finally(() => {
-            if (fetchBtn) {
-                fetchBtn.disabled = false;
-                fetchBtn.textContent = '获取数据';
-            }
-        });
-}
-
 function renderUrlApiList(apiList) {
     const listContainer = $('urlImportList');
     if (!listContainer) return;
@@ -1310,7 +1242,6 @@ window.cancelImportCustomApiForm = cancelImportCustomApiForm;
 window.importCustomApis = importCustomApis;
 window.showUrlImportModal = showUrlImportModal;
 window.closeUrlImportModal = closeUrlImportModal;
-window.fetchApiDataFromUrl = fetchApiDataFromUrl;
 window.importSelectedApis = importSelectedApis;
 window.importConfig = importConfig;
 window.exportConfig = exportConfig;
@@ -1364,7 +1295,6 @@ window.handleSortChange = function(value) {
     sortAndRenderResults();
 };
 
-// URL 导入 API（简化实现）
 window.fetchApiDataFromUrl = async function() {
     const urlInput = $('urlImportInput');
     const url = urlInput?.value.trim();
@@ -1373,40 +1303,52 @@ window.fetchApiDataFromUrl = async function() {
         return;
     }
     if (!/^https?:\/\/.+/.test(url)) {
-        showToast('URL格式不正确', 'warning');
+        showToast('URL格式不正确，需以http://或https://开头', 'warning');
         return;
     }
 
-    showLoading('获取数据中...');
+    const fetchBtn = document.querySelector('#urlImportModal button[onclick="fetchApiDataFromUrl()"]');
+    if (fetchBtn) {
+        fetchBtn.disabled = true;
+        fetchBtn.textContent = '获取中...';
+    }
+
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error('网络请求失败');
-        const data = await response.json();
+        const text = await response.text();
+
+        let apiList;
+        try {
+            const decodedData = base58Decode(text);
+            apiList = JSON.parse(decodedData);
+        } catch (decodeError) {
+            apiList = JSON.parse(text);
+        }
 
         let apiArray = [];
-        if (Array.isArray(data)) {
-            apiArray = data.map(api => ({
-                name: api.name,
-                baseUrl: api.baseUrl || api.api,
-                detail: api.detail,
-                isAdult: api.isAdult || false
-            }));
-        } else if (data && typeof data === 'object' && data.api_site) {
-            apiArray = Object.values(data.api_site).map(api => ({
-                name: api.name,
-                baseUrl: api.api,
-                detail: api.detail,
-                isAdult: api.isAdult || false
+        if (Array.isArray(apiList)) {
+            apiArray = apiList.map(api => ({ ...api, isAdult: api.isAdult || false }));
+        } else if (apiList && typeof apiList === 'object' && apiList.api_site) {
+            const apiSites = apiList.api_site;
+            apiArray = Object.values(apiSites).map(apiSite => ({
+                name: apiSite.name,
+                baseUrl: apiSite.api,
+                detail: apiSite.detail,
+                isAdult: apiSite.isAdult || false
             }));
         } else {
-            throw new Error('数据格式不正确');
+            throw new Error('解码后数据格式不正确，应为数组类型或包含api_site的对象');
         }
 
         renderUrlApiList(apiArray);
     } catch (error) {
         showToast('获取数据失败: ' + error.message, 'error');
     } finally {
-        hideLoading();
+        if (fetchBtn) {
+            fetchBtn.disabled = false;
+            fetchBtn.textContent = '获取数据';
+        }
     }
 };
 
