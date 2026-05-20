@@ -64,6 +64,21 @@ export function formatTime(timestamp) {
 }
 
 /**
+ * 将秒数格式化为 mm:ss 或 hh:mm:ss
+ */
+export function formatDuration(seconds) {
+    if (seconds == null || isNaN(seconds) || seconds < 0) return '';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    const parts = [];
+    if (h > 0) parts.push(String(h).padStart(2, '0'));
+    parts.push(String(m).padStart(2, '0'));
+    parts.push(String(s).padStart(2, '0'));
+    return parts.join(':');
+}
+
+/**
  * 安全的 URL 拼接
  */
 export function buildUrl(base, params) {
@@ -94,6 +109,36 @@ export function sleep(ms) {
 /**
  * 带超时的 Promise
  */
+const BASE58_CHARS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+/**
+ * Base58 解码
+ */
+export function base58Decode(input) {
+    let result = new Uint8Array(0);
+    for (let i = 0; i < input.length; i++) {
+        const charIndex = BASE58_CHARS.indexOf(input[i]);
+        if (charIndex === -1) {
+            throw new Error('Invalid Base58 character: ' + input[i]);
+        }
+        let carry = charIndex;
+        for (let j = 0; j < result.length; j++) {
+            carry += result[j] * 58;
+            result[j] = carry & 0xff;
+            carry >>= 8;
+        }
+        while (carry > 0) {
+            result = new Uint8Array([...result, carry & 0xff]);
+            carry >>= 8;
+        }
+    }
+    for (let i = 0; i < input.length && input[i] === BASE58_CHARS[0]; i++) {
+        result = new Uint8Array([0, ...result]);
+    }
+    result = new Uint8Array([...result].reverse());
+    return new TextDecoder().decode(result);
+}
+
 export function withTimeout(promise, ms, errorMessage = '操作超时') {
     const timeout = new Promise((_, reject) =>
         setTimeout(() => reject(new Error(errorMessage)), ms)

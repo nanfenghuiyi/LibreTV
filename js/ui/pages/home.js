@@ -3,7 +3,7 @@
 import { $, delegate, toggleDisplay, setVisible, clearElement } from '../../core/dom.js';
 import { eventBus } from '../../core/events.js';
 import { Events, StorageKeys, DOM_IDS } from '../../core/constants.js';
-import { escapeHtml, debounce } from '../../core/utils.js';
+import { escapeHtml, debounce, base58Decode } from '../../core/utils.js';
 import { storage } from '../../core/storage.js';
 import { settingsService } from '../../services/settings-service.js';
 import { searchService } from '../../services/search-service.js';
@@ -1006,6 +1006,224 @@ function showUrlImportModal() {
 
 function closeUrlImportModal() {
     closeModal('urlImportModal');
+    // 重置弹窗状态
+    const urlInput = $('urlImportInput');
+    const listContainer = $('urlImportList');
+    const importBtn = $('importSelectedApiBtn');
+    if (urlInput) urlInput.value = 'https://lunatv-config.htnf.dpdns.org/?format=3&source=jin18';
+    if (listContainer) {
+        listContainer.classList.add('hidden');
+        listContainer.innerHTML = '';
+    }
+    if (importBtn) importBtn.classList.add('hidden');
+}
+
+function fetchApiDataFromUrl() {
+    const urlInput = $('urlImportInput');
+    const url = urlInput?.value.trim();
+
+    if (!url) {
+        showToast('请输入配置URL', 'warning');
+        return;
+    }
+    if (!/^https?:\/\/.+/.test(url)) {
+        showToast('URL格式不正确，需以http://或https://开头', 'warning');
+        return;
+    }
+
+    const fetchBtn = document.querySelector('#urlImportModal button[onclick="fetchApiDataFromUrl()"]');
+    if (fetchBtn) {
+        fetchBtn.disabled = true;
+        fetchBtn.textContent = '获取中...';
+    }
+
+    fetch(url)
+        .then(response => {
+            if (!response.ok) throw new Error('网络请求失败');
+            return response.text();
+        })
+        .then(data => {
+            try {
+                let apiList;
+                try {
+                    const decodedData = base58Decode(data);
+                    apiList = JSON.parse(decodedData);
+                } catch (decodeError) {
+                    console.log('Base58解码失败，尝试直接解析JSON:', decodeError.message);
+                    apiList = JSON.parse(data);
+                }
+
+                let apiArray = [];
+                if (Array.isArray(apiList)) {
+                    apiArray = apiList.map(api => ({ ...api, isAdult: api.isAdult || false }));
+                } else if (apiList && typeof apiList === 'object' && apiList.api_site) {
+                    const apiSites = apiList.api_site;
+                    apiArray = Object.values(apiSites).map(apiSite => ({
+                        name: apiSite.name,
+                        baseUrl: apiSite.api,
+                        detail: apiSite.detail,
+                        isAdult: apiSite.isAdult || false
+                    }));
+                } else {
+                    throw new Error('解码后数据格式不正确，应为数组类型或包含api_site的对象');
+                }
+
+                renderUrlApiList(apiArray);
+            } catch (error) {
+                showToast('数据解码或解析失败: ' + error.message, 'error');
+                console.error('数据处理错误:', error);
+            }
+        })
+        .catch(error => {
+            showToast('获取数据失败: ' + error.message, 'error');
+            console.error('网络请求错误:', error);
+        })
+        .finally(() => {
+            if (fetchBtn) {
+                fetchBtn.disabled = false;
+                fetchBtn.textContent = '获取数据';
+            }
+        });
+}
+
+function renderUrlApiList(apiList) {
+    const listContainer = $('urlImportList');
+    if (!listContainer) return;
+    listContainer.innerHTML = '';
+
+    if (apiList.length === 0) {
+        listContainer.innerHTML = '<p class="text-gray-400">未找到API数据</p>';
+        listContainer.classList.remove('hidden');
+        return;
+    }
+
+    const ul = document.createElement('ul');
+    ul.className = 'space-y-2';
+
+    apiList.forEach((api, index) => {
+        if (api.name && api.baseUrl) {
+            const li = document.createElement('li');
+            li.className = 'flex flex-col p-3 bg-[#222] rounded-lg';
+
+            const mainRow = document.createElement('div');
+            mainRow.className = 'flex items-center';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = 'urlApi_' + index;
+            checkbox.className = 'w-4 h-4 text-blue-600 bg-[#333] border-[#444] rounded focus:ring-blue-500 focus:ring-offset-[#222]';
+            checkbox.value = JSON.stringify(api);
+
+            const label = document.createElement('label');
+            label.htmlFor = 'urlApi_' + index;
+            const textColorClass = api.isAdult ? 'text-pink-400' : 'text-gray-300';
+            const adultTag = api.isAdult ? '<span class="text-xs text-pink-400 mr-1">(18+)</span>' : '';
+            label.className = `ml-3 text-sm font-medium ${textColorClass} flex-grow`;
+            label.innerHTML = `<div class="font-semibold">${adultTag}${escapeHtml(api.name)}</div><div class="text-xs text-gray-500">${escapeHtml(api.baseUrl)}</div>`;
+
+            mainRow.appendChild(checkbox);
+            mainRow.appendChild(label);
+
+            const adultCheckboxRow = document.createElement('div');
+            adultCheckboxRow.className = 'flex items-center mt-2 ml-7';
+
+            const adultCheckbox = document.createElement('input');
+            adultCheckbox.type = 'checkbox';
+            adultCheckbox.id = 'urlApiAdult_' + index;
+            adultCheckbox.className = 'w-4 h-4 text-pink-600 bg-[#333] border-[#444] rounded focus:ring-pink-500 focus:ring-offset-[#222]';
+            adultCheckbox.checked = api.isAdult || false;
+
+            adultCheckbox.addEventListener('change', (e) => {
+                api.isAdult = e.target.checked;
+                checkbox.value = JSON.stringify(api);
+                const newTextColorClass = e.target.checked ? 'text-pink-400' : 'text-gray-300';
+                const newAdultTag = e.target.checked ? '<span class="text-xs text-pink-400 mr-1">(18+)</span>' : '';
+                label.className = `ml-3 text-sm font-medium ${newTextColorClass} flex-grow`;
+                label.innerHTML = `<div class="font-semibold">${newAdultTag}${escapeHtml(api.name)}</div><div class="text-xs text-gray-500">${escapeHtml(api.baseUrl)}</div>`;
+            });
+
+            const adultLabel = document.createElement('label');
+            adultLabel.htmlFor = 'urlApiAdult_' + index;
+            adultLabel.className = 'ml-2 text-xs text-pink-400';
+            adultLabel.textContent = '黄色资源站';
+
+            adultCheckboxRow.appendChild(adultCheckbox);
+            adultCheckboxRow.appendChild(adultLabel);
+
+            li.appendChild(mainRow);
+            li.appendChild(adultCheckboxRow);
+            ul.appendChild(li);
+        }
+    });
+
+    listContainer.appendChild(ul);
+    listContainer.classList.remove('hidden');
+
+    const importBtn = $('importSelectedApiBtn');
+    if (importBtn) importBtn.classList.remove('hidden');
+
+    ul.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', updateImportBtnStatus);
+    });
+}
+
+function updateImportBtnStatus() {
+    const checkboxes = document.querySelectorAll('#urlImportList input[type="checkbox"]:not([id^="urlApiAdult_"])');
+    const hasChecked = Array.from(checkboxes).some(cb => cb.checked);
+    const importBtn = $('importSelectedApiBtn');
+    if (importBtn) {
+        importBtn.classList.toggle('hidden', !hasChecked);
+    }
+}
+
+function importSelectedApis() {
+    const checkboxes = document.querySelectorAll('#urlImportList input[type="checkbox"]:checked:not([id^="urlApiAdult_"])');
+    if (checkboxes.length === 0) {
+        showToast('请先选择要导入的API', 'warning');
+        return;
+    }
+
+    let importedCount = 0;
+    let existingCount = 0;
+    const apis = settingsService.getCustomAPIs();
+    const selected = settingsService.getSelectedAPIs();
+
+    checkboxes.forEach(checkbox => {
+        try {
+            const api = JSON.parse(checkbox.value);
+            if (api.name && api.baseUrl) {
+                const exists = apis.some(item => item.url === api.baseUrl);
+                if (!exists) {
+                    let url = api.baseUrl;
+                    if (url.endsWith('/')) url = url.slice(0, -1);
+                    apis.push({ name: api.name, url, detail: api.detail || '', isAdult: api.isAdult || false });
+                    importedCount++;
+                } else {
+                    existingCount++;
+                }
+            }
+        } catch (error) {
+            console.error('解析API数据失败:', error);
+        }
+    });
+
+    if (importedCount > 0) {
+        settingsService.updateCustomAPIs(apis);
+        // 自动选中新导入的API
+        const newKeys = [];
+        for (let i = apis.length - importedCount; i < apis.length; i++) {
+            newKeys.push(`custom_${i}`);
+        }
+        settingsService.setSelectedAPIs([...new Set([...selected, ...newKeys])]);
+        renderCustomAPIs();
+        renderAPICheckboxes();
+        updateSelectedCount();
+    }
+
+    let message = `成功导入 ${importedCount} 个API`;
+    if (existingCount > 0) message += `，${existingCount} 个API已存在`;
+    showToast(message, 'success');
+    closeUrlImportModal();
 }
 
 // ==================== API批量操作 ====================
@@ -1092,6 +1310,8 @@ window.cancelImportCustomApiForm = cancelImportCustomApiForm;
 window.importCustomApis = importCustomApis;
 window.showUrlImportModal = showUrlImportModal;
 window.closeUrlImportModal = closeUrlImportModal;
+window.fetchApiDataFromUrl = fetchApiDataFromUrl;
+window.importSelectedApis = importSelectedApis;
 window.importConfig = importConfig;
 window.exportConfig = exportConfig;
 window.clearLocalStorage = clearLocalStorage;

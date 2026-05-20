@@ -114,6 +114,16 @@ function initPlayer() {
             }
         });
 
+        // 定期保存播放进度
+        setInterval(() => {
+            if (player && currentId && currentSource) {
+                const currentTime = player.currentTime;
+                if (currentTime && currentTime > 10) {
+                    historyService.updateProgress(currentId, currentSource, currentIndex, currentTime);
+                }
+            }
+        }, 10000);
+
         updateEpisodeInfo();
         renderEpisodeList();
         renderResourceInfoBar();

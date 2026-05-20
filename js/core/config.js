@@ -30,11 +30,6 @@ export const AGGREGATED_SEARCH_CONFIG = Object.freeze({
 
 // API 站点配置
 export const API_SITES = Object.freeze({
-    testSource: {
-        api: 'https://www.example.com/api.php/provide/vod',
-        name: '空内容测试源',
-        adult: true
-    },
     qiqi: {
         api: 'https://www.qiqidys.com/api.php/provide/vod',
         name: '七七资源'

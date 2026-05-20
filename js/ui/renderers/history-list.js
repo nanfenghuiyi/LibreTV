@@ -1,6 +1,6 @@
 // 观看历史列表渲染器
 
-import { escapeHtml, formatTime } from '../../core/utils.js';
+import { escapeHtml, formatTime, formatDuration } from '../../core/utils.js';
 import { clearElement, $ } from '../../core/dom.js';
 
 /**
@@ -45,8 +45,9 @@ export function renderHistoryList(history, containerId = 'historyList', onClear 
             <div class="flex-1 min-w-0">
                 <h4 class="text-sm text-white truncate">${escapeHtml(item.title || '未知视频')}</h4>
                 <p class="text-xs text-gray-500">
-                    ${item.episodeName ? `看到 ${escapeHtml(item.episodeName)} · ` : ''}
-                    ${formatTime(item.timestamp)}
+                    ${item.episodeName ? `看到 ${escapeHtml(item.episodeName)}` : ''}
+                    ${item.currentTime ? ` ${formatDuration(item.currentTime)}` : ''}
+                    ${item.episodeName || item.currentTime ? ' · ' : ''}${formatTime(item.timestamp)}
                 </p>
             </div>
         </div>
