@@ -1085,6 +1085,7 @@ function renderUrlApiList(apiList) {
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.id = 'urlApi_' + index;
+            checkbox.checked = true;
             checkbox.className = 'w-4 h-4 text-blue-600 bg-[#333] border-[#444] rounded focus:ring-blue-500 focus:ring-offset-[#222]';
             checkbox.value = JSON.stringify(api);
 
