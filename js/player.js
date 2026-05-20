@@ -595,9 +595,9 @@ function initPlayer(videoUrl) {
 
     // 隐藏控制栏
     function hideControls() {
-        if (art && art.controls) {
-            art.controls.show = false;
-        }
+        // if (art && art.controls) {
+        //     art.controls.show = false;
+        // }
     }
 
     // 重置计时器，计时器超时时间与 artplayer 保持一致
