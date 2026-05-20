@@ -579,6 +579,41 @@
     <!-- 版本检测脚本 -->
     <script src="js/version-check.js"></script>
 
+    <!-- 全局函数占位符（ES Module 加载前预定义，避免内联 onclick 报错） -->
+    <script>
+        window.search = function() { console.warn('search: 模块尚未加载'); };
+        window.toggleHistory = function() { console.warn('toggleHistory: 模块尚未加载'); };
+        window.toggleSettings = function() { console.warn('toggleSettings: 模块尚未加载'); };
+        window.clearSearchInput = function() {};
+        window.toggleClearButton = function() {};
+        window.clearViewingHistory = function() {};
+        window.closeModal = function() {};
+        window.resetToHome = function() {};
+        window.handlePasswordSubmit = function() {};
+        window.hidePasswordModal = function() {};
+        window.handleSortChange = function() {};
+        window.importSelectedApis = function() {};
+        window.fetchApiDataFromUrl = function() {};
+        window.closeUrlImportModal = function() {};
+        window.showAddCustomApiForm = function() {};
+        window.cancelAddCustomApi = function() {};
+        window.addCustomApi = function() {};
+        window.editCustomApi = function() {};
+        window.updateCustomApi = function() {};
+        window.cancelEditCustomApi = function() {};
+        window.showImportCustomApiForm = function() {};
+        window.cancelImportCustomApiForm = function() {};
+        window.importCustomApis = function() {};
+        window.showUrlImportModal = function() {};
+        window.importConfig = function() {};
+        window.exportConfig = function() {};
+        window.clearLocalStorage = function() {};
+        window.selectAllAPIs = function() {};
+        window.selectAllCustomAPIs = function() {};
+        window.deleteAllCustomAPIs = function() {};
+        window.updateSiteStatus = function() {};
+    </script>
+
     <!-- 新架构入口：ES Module -->
     <script type="module" src="js/ui/pages/home.js"></script>
 

@@ -1410,36 +1410,6 @@ window.fetchApiDataFromUrl = async function() {
     }
 };
 
-function renderUrlApiList(apiList) {
-    const listContainer = $('urlImportList');
-    const importBtn = $('importSelectedApiBtn');
-    if (!listContainer) return;
-
-    if (apiList.length === 0) {
-        listContainer.innerHTML = '<p class="text-gray-400">未找到API数据</p>';
-        listContainer.classList.remove('hidden');
-        if (importBtn) importBtn.classList.add('hidden');
-        return;
-    }
-
-    listContainer.innerHTML = `
-        <ul class="space-y-2">
-            ${apiList.map((api, index) => `
-                <li class="flex items-center p-3 bg-[#222] rounded-lg">
-                    <input type="checkbox" id="urlApi_${index}" value="${escapeHtml(JSON.stringify(api))}"
-                           class="w-4 h-4 text-blue-600 bg-[#333] border-[#444] rounded">
-                    <label for="urlApi_${index}" class="ml-3 text-sm flex-grow">
-                        <div class="font-semibold ${api.isAdult ? 'text-pink-400' : 'text-gray-300'}">${api.isAdult ? '(18+) ' : ''}${escapeHtml(api.name)}</div>
-                        <div class="text-xs text-gray-500">${escapeHtml(api.baseUrl)}</div>
-                    </label>
-                </li>
-            `).join('')}
-        </ul>
-    `;
-    listContainer.classList.remove('hidden');
-    if (importBtn) importBtn.classList.remove('hidden');
-}
-
 window.importSelectedApis = function() {
     const checkboxes = document.querySelectorAll('#urlImportList input[type="checkbox"]:checked');
     if (checkboxes.length === 0) {
