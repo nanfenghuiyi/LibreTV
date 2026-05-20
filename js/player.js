@@ -402,6 +402,9 @@ function initPlayer(videoUrl) {
         return
     }
 
+    // 将视频 URL 转换为代理 URL
+    const proxyVideoUrl = convertToProxyUrl(videoUrl);
+
     // 销毁旧实例
     if (art) {
         art.destroy();
@@ -440,7 +443,7 @@ function initPlayer(videoUrl) {
     // Create new ArtPlayer instance
     art = new Artplayer({
         container: '#player',
-        url: videoUrl,
+        url: proxyVideoUrl,
         type: 'm3u8',
         title: videoTitle,
         volume: 0.8,
@@ -509,7 +512,7 @@ function initPlayer(videoUrl) {
                     }
                 });
 
-                hls.loadSource(url);
+                hls.loadSource(proxyVideoUrl);
                 hls.attachMedia(video);
 
                 // enable airplay, from https://github.com/video-dev/hls.js/issues/5989
@@ -517,11 +520,11 @@ function initPlayer(videoUrl) {
                 let sourceElement = video.querySelector('source');
                 if (sourceElement) {
                     // 更新现有source元素的URL
-                    sourceElement.src = videoUrl;
+                    sourceElement.src = proxyVideoUrl;
                 } else {
                     // 创建新的source元素
                     sourceElement = document.createElement('source');
-                    sourceElement.src = videoUrl;
+                    sourceElement.src = proxyVideoUrl;
                     video.appendChild(sourceElement);
                 }
                 video.disableRemotePlayback = false;
@@ -962,6 +965,15 @@ function playNextEpisode() {
     if (currentEpisodeIndex < currentEpisodes.length - 1) {
         playEpisode(currentEpisodeIndex + 1);
     }
+}
+
+// 将视频 URL 转换为代理 URL 格式
+function convertToProxyUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+        return `/proxy/${encodeURIComponent(url)}`;
+    }
+    return url;
 }
 
 // 复制播放链接
