@@ -592,7 +592,7 @@ function renderSearchHistory() {
     html += history.map(q => `
         <span class="search-history-tag flex items-center gap-1 px-3 py-1 text-xs rounded-full bg-[#222] text-gray-400 border border-[#333] hover:border-white hover:text-white transition-colors"
               data-query="${escapeHtml(q)}">
-            <button class="hover:text-red-400 transition-colors cursor-pointer" data-delete="${escapeHtml(q)}" aria-label="删除">&times;</button>
+            <button class="flex items-center justify-center w-5 h-5 -ml-1 mr-0.5 hover:text-red-400 transition-colors cursor-pointer" data-delete="${escapeHtml(q)}" aria-label="删除">&times;</button>
             <span>${escapeHtml(q)}</span>
         </span>
     `).join('');
