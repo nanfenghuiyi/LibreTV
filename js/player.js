@@ -1008,12 +1008,15 @@ async function downloadVideo() {
         return;
     }
     
+    // 与播放器保持一致，使用代理URL
+    const proxyUrl = convertToProxyUrl(videoUrl);
+    
     const videoTitle = currentVideoTitle || '视频';
     const episodeText = currentEpisodes.length > 0 ? `第${currentEpisodeIndex + 1}集` : '';
     const fileName = episodeText ? `${videoTitle}_${episodeText}` : videoTitle;
     
+    // m3u8和普通视频统一使用fetch下载
     try {
-        const proxyUrl = convertToProxyUrl(videoUrl);
         showToast('正在准备下载...', 'info');
         
         const response = await fetch(proxyUrl);
@@ -1031,12 +1034,18 @@ async function downloadVideo() {
         a.click();
         document.body.removeChild(a);
         
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-        showToast('下载已开始', 'success');
+        // 延迟释放blob URL
+        setTimeout(() => {
+            URL.revokeObjectURL(blobUrl);
+        }, 1000);
+        
+        const fileType = videoUrl.includes('.m3u8') ? 'm3u8索引文件' : '视频';
+        showToast(`${fileType}下载已开始`, 'success');
     } catch (error) {
         console.error('下载失败:', error);
-        window.open(videoUrl, '_blank');
-        showToast('已在新标签页打开，请右键另存为', 'info');
+        // 降级方案：在新标签页打开代理链接
+        window.open(proxyUrl, '_blank');
+        showToast('已在新标签页打开视频，请右键另存为', 'info');
     }
 }
 
