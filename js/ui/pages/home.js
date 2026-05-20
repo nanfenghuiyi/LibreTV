@@ -21,6 +21,7 @@ import { fetchHot } from '../../api/douban-client.js';
 // 页面状态
 let currentQuery = '';
 let currentTypeFilter = '';
+let editingCustomApiIndex = -1;
 
 // 挂载到 window 供内联 onclick 使用
 window.LibreTV = window.LibreTV || {};
@@ -53,7 +54,7 @@ window.LibreTV.toggleDetailEpisodeOrder = function() {
             document.querySelectorAll('.episode-item').forEach(el => {
                 el.addEventListener('click', () => {
                     const idx = parseInt(el.dataset.index, 10);
-                    playVideo(videoInfo.title, videoInfo.source_code || '', episodes, idx);
+                    playVideo(videoInfo.title, videoInfo.source_code || '', episodes, idx, videoInfo.id);
                 });
             });
         }, 0);
@@ -225,7 +226,14 @@ async function handleSearch() {
 
     currentQuery = query;
     addSearchHistory(query);
-    setVisible(DOM_IDS.SEARCH_AREA, false);
+
+    // 调整搜索区域布局：从居中全屏变为顶部固定
+    const searchArea = $(DOM_IDS.SEARCH_AREA);
+    if (searchArea) {
+        searchArea.classList.remove('flex-1', 'justify-center');
+        searchArea.classList.add('mb-8');
+    }
+
     setVisible(DOM_IDS.RESULTS_AREA, true);
     setVisible(DOM_IDS.DOUBAN_AREA, false);
 
@@ -351,12 +359,13 @@ function renderDetailModal(episodes, videoInfo) {
     }, 0);
 }
 
-function playVideo(title, source, episodes, index) {
+function playVideo(title, source, episodes, index, id = '') {
     historyService.savePlaybackState({
         title,
         source,
         episodes,
-        episodeIndex: index
+        episodeIndex: index,
+        id
     });
 
     // 保存当前页面URL，便于播放器页返回
@@ -369,6 +378,7 @@ function playVideo(title, source, episodes, index) {
     params.set('source', source);
     params.set('url', url);
     params.set('index', String(index));
+    if (id) params.set('id', id);
 
     window.location.href = `player.html?${params.toString()}`;
 }
@@ -471,8 +481,12 @@ function renderCustomAPIs() {
                            data-api-key="${key}">
                     <span class="ml-2 text-xs text-gray-300 truncate">${escapeHtml(api.name || api.url)}</span>
                 </div>
-                <button data-index="${index}" class="delete-custom-api text-red-400 hover:text-red-300 text-xs"
-                        title="删除">×</button>
+                <div class="flex items-center gap-1">
+                    <button data-index="${index}" class="edit-custom-api text-blue-400 hover:text-blue-300 text-xs"
+                            title="编辑">✎</button>
+                    <button data-index="${index}" class="delete-custom-api text-red-400 hover:text-red-300 text-xs"
+                            title="删除">×</button>
+                </div>
             </div>
         `;
     }).join('');
@@ -481,6 +495,12 @@ function renderCustomAPIs() {
     container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
         cb.addEventListener('change', (e) => {
             sourceService.toggleSource(e.target.dataset.apiKey, e.target.checked);
+        });
+    });
+
+    container.querySelectorAll('.edit-custom-api').forEach(btn => {
+        btn.addEventListener('click', () => {
+            editCustomApi(parseInt(btn.dataset.index, 10));
         });
     });
 
@@ -814,9 +834,97 @@ function initCustomApiForm() {
     }
 }
 
+function editCustomApi(index) {
+    const apis = settingsService.getCustomAPIs();
+    const api = apis[index];
+    if (!api) return;
+
+    editingCustomApiIndex = index;
+
+    const nameInput = $('customApiName');
+    const urlInput = $('customApiUrl');
+    const detailInput = $('customApiDetail');
+    const adultInput = $('customApiIsAdult');
+    if (nameInput) nameInput.value = api.name || '';
+    if (urlInput) urlInput.value = api.url || '';
+    if (detailInput) detailInput.value = api.detail || '';
+    if (adultInput) adultInput.checked = api.isAdult || false;
+
+    const form = $('addCustomApiForm');
+    if (form) form.classList.remove('hidden');
+
+    const addBtn = document.getElementById('addCustomApiBtn');
+    const cancelBtn = document.getElementById('cancelCustomApiBtn');
+    if (addBtn) {
+        addBtn.textContent = '更新';
+        addBtn.setAttribute('onclick', 'updateCustomApi()');
+    }
+    if (cancelBtn) {
+        cancelBtn.textContent = '取消编辑';
+        cancelBtn.setAttribute('onclick', 'cancelEditCustomApi()');
+    }
+}
+
+function updateCustomApi() {
+    const nameInput = $('customApiName');
+    const urlInput = $('customApiUrl');
+    const detailInput = $('customApiDetail');
+    const adultInput = $('customApiIsAdult');
+
+    const name = nameInput?.value.trim();
+    const url = urlInput?.value.trim();
+    const detail = detailInput?.value.trim();
+    const isAdult = adultInput?.checked || false;
+
+    if (!name || !url) {
+        showToast('请填写名称和地址', 'warning');
+        return;
+    }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        showToast('API地址必须以http://或https://开头', 'warning');
+        return;
+    }
+
+    try {
+        sourceService.updateCustomSource(editingCustomApiIndex, name, url, detail, isAdult);
+        showToast('自定义API更新成功', 'success');
+        cancelEditCustomApi();
+        renderCustomAPIs();
+        renderAPICheckboxes();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function cancelEditCustomApi() {
+    const form = $('addCustomApiForm');
+    if (form) {
+        form.querySelectorAll('input').forEach(input => {
+            if (input.type !== 'checkbox') input.value = '';
+            else input.checked = false;
+        });
+    }
+    editingCustomApiIndex = -1;
+    restoreAddCustomApiButtons();
+}
+
+function restoreAddCustomApiButtons() {
+    const addBtn = document.getElementById('addCustomApiBtn');
+    const cancelBtn = document.getElementById('cancelCustomApiBtn');
+    if (addBtn) {
+        addBtn.textContent = '添加';
+        addBtn.setAttribute('onclick', 'addCustomApi()');
+    }
+    if (cancelBtn) {
+        cancelBtn.textContent = '取消';
+        cancelBtn.setAttribute('onclick', 'cancelAddCustomApi()');
+    }
+}
+
 function showAddCustomApiForm() {
     const form = $('addCustomApiForm');
     if (form) form.classList.remove('hidden');
+    cancelEditCustomApi();
 }
 
 function cancelAddCustomApi() {
@@ -937,7 +1045,10 @@ function resetToHome() {
     const resultsArea = $('resultsArea');
     const doubanArea = $('doubanArea');
 
-    if (searchArea) searchArea.classList.remove('hidden');
+    if (searchArea) {
+        searchArea.classList.remove('hidden', 'mb-8');
+        searchArea.classList.add('flex-1', 'justify-center');
+    }
     if (resultsArea) resultsArea.classList.add('hidden');
     if (doubanArea && settingsService.isDoubanEnabled()) doubanArea.classList.remove('hidden');
 
@@ -973,6 +1084,9 @@ window.deleteAllCustomAPIs = deleteAllCustomAPIs;
 window.showAddCustomApiForm = showAddCustomApiForm;
 window.cancelAddCustomApi = cancelAddCustomApi;
 window.addCustomApi = addCustomApi;
+window.editCustomApi = editCustomApi;
+window.updateCustomApi = updateCustomApi;
+window.cancelEditCustomApi = cancelEditCustomApi;
 window.showImportCustomApiForm = showImportCustomApiForm;
 window.cancelImportCustomApiForm = cancelImportCustomApiForm;
 window.importCustomApis = importCustomApis;

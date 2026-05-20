@@ -18,6 +18,7 @@ let currentEpisodes = [];
 let currentIndex = 0;
 let currentTitle = '';
 let currentSource = '';
+let currentId = '';
 let isReversed = false;
 
 // 初始化
@@ -32,6 +33,7 @@ function initFromUrl() {
     const params = new URLSearchParams(window.location.search);
     currentTitle = params.get('title') || storage.get(StorageKeys.CURRENT_VIDEO_TITLE) || '未知视频';
     currentSource = params.get('source') || storage.get(StorageKeys.CURRENT_SOURCE_CODE) || '';
+    currentId = params.get('id') || storage.get(StorageKeys.CURRENT_PLAYING_ID) || '';
     currentIndex = parseInt(params.get('index') || storage.get(StorageKeys.CURRENT_EPISODE_INDEX) || '0', 10);
 
     const url = params.get('url');
@@ -244,7 +246,7 @@ function saveHistory() {
     if (!currentTitle || !currentEpisodes.length) return;
 
     historyService.addHistory({
-        id: storage.get(StorageKeys.CURRENT_PLAYING_ID, ''),
+        id: currentId,
         title: currentTitle,
         source: currentSource,
         episodeIndex: currentIndex,

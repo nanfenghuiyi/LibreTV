@@ -84,6 +84,7 @@ export async function getDetail(id, source, customApi = '', customDetail = '') {
         const sourceName = source === 'custom' ? '自定义源' : API_SITES[source].name;
 
         return buildDetailResponse(episodes, detailUrl, {
+            id: videoDetail.vod_id,
             title: videoDetail.vod_name,
             cover: videoDetail.vod_pic,
             desc: videoDetail.vod_content,

@@ -105,6 +105,16 @@ export function addCustomSource(name, url, detail = '', isAdult = false) {
 /**
  * 删除自定义源
  */
+export function updateCustomSource(index, name, url, detail = '', isAdult = false) {
+    const apis = settingsService.getCustomAPIs();
+    if (index < 0 || index >= apis.length) {
+        throw new Error('无效的自定义源索引');
+    }
+    apis[index] = { ...apis[index], name, url, detail, isAdult };
+    settingsService.updateCustomAPIs(apis);
+    return apis;
+}
+
 export function removeCustomSource(index) {
     const apis = settingsService.getCustomAPIs();
     apis.splice(index, 1);
@@ -145,6 +155,7 @@ export const sourceService = {
     toggleSource,
     selectAllSources,
     addCustomSource,
+    updateCustomSource,
     removeCustomSource,
     testSource,
     getSourceByKey
