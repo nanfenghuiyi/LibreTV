@@ -590,18 +590,29 @@ function renderSearchHistory() {
         </div>
     `;
     html += history.map(q => `
-        <button class="search-history-tag px-3 py-1 text-xs rounded-full bg-[#222] text-gray-400 border border-[#333] hover:border-white hover:text-white transition-colors"
-                data-query="${escapeHtml(q)}">
-            ${escapeHtml(q)}
-        </button>
+        <span class="search-history-tag flex items-center gap-1 px-3 py-1 text-xs rounded-full bg-[#222] text-gray-400 border border-[#333] hover:border-white hover:text-white transition-colors"
+              data-query="${escapeHtml(q)}">
+            <button class="hover:text-red-400 transition-colors cursor-pointer" data-delete="${escapeHtml(q)}" aria-label="删除">&times;</button>
+            <span>${escapeHtml(q)}</span>
+        </span>
     `).join('');
 
     container.innerHTML = html;
 
-    container.querySelectorAll('.search-history-tag').forEach(btn => {
-        btn.addEventListener('click', () => {
+    container.querySelectorAll('.search-history-tag').forEach(tag => {
+        // 点击删除按钮
+        const deleteBtn = tag.querySelector('[data-delete]');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const query = deleteBtn.dataset.delete;
+                deleteSingleSearchHistory(query);
+            });
+        }
+        // 点击标签区域（除删除按钮外）触发搜索
+        tag.addEventListener('click', () => {
             const input = $('searchInput');
-            if (input) input.value = btn.dataset.query;
+            if (input) input.value = tag.dataset.query;
             handleSearch();
         });
     });
@@ -618,6 +629,13 @@ function clearSearchHistory() {
     storage.remove(StorageKeys.SEARCH_HISTORY);
     renderSearchHistory();
     showToast('搜索历史已清除', 'success');
+}
+
+function deleteSingleSearchHistory(query) {
+    let history = getSearchHistory();
+    history = history.filter(q => q !== query);
+    storage.set(StorageKeys.SEARCH_HISTORY, history);
+    renderSearchHistory();
 }
 
 // ==================== 配置导入/导出 ====================
