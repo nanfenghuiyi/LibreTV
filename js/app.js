@@ -1495,16 +1495,11 @@ function handlePlayerError() {
 // 辅助函数用于渲染剧集按钮（使用当前的排序状态）
 function renderEpisodes(vodName, sourceCode, vodId) {
     const episodes = episodesReversed ? [...currentEpisodes].reverse() : currentEpisodes;
-    const escapedSourceCode = sourceCode.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
-    const escapedVodId = vodId.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
     return episodes.map((episode, index) => {
         // 根据倒序状态计算真实的剧集索引
         const realIndex = episodesReversed ? currentEpisodes.length - 1 - index : index;
-        // 对 URL 中的单引号进行转义，防止破坏 onclick 属性
-        const escapedEpisode = episode.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
-        const escapedVodName = vodName.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
         return `
-            <button id="episode-${realIndex}" onclick="playVideo('${escapedEpisode}','${escapedVodName}', '${escapedSourceCode}', ${realIndex}, '${escapedVodId}')" 
+            <button id="episode-${realIndex}" onclick="playVideo('${episode}','${vodName.replace(/"/g, '&quot;')}', '${sourceCode}', ${realIndex}, '${vodId}')" 
                     class="px-4 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded-lg transition-colors text-center episode-btn">
                 ${realIndex + 1}
             </button>
