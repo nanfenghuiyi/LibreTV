@@ -1365,9 +1365,6 @@ async function showDetails(id, vod_name, sourceCode) {
                         <button onclick="copyLinks()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors">
                             复制链接
                         </button>
-                        <button onclick="downloadLinks()" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors">
-                            下载链接
-                        </button>
                         <button onclick="openIframeModal()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm transition-colors">
                             iframe预览
                         </button>
@@ -1526,21 +1523,6 @@ function copyLinks() {
     });
 }
 
-function downloadLinks() {
-    const episodes = episodesReversed ? [...currentEpisodes].reverse() : currentEpisodes;
-    const linkList = episodes.join('\r\n');
-    const blob = new Blob([linkList], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${currentVideoTitle || '播放链接'}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('链接文件已下载', 'success');
-}
-
 function openIframeModal() {
     const episodes = episodesReversed ? [...currentEpisodes].reverse() : currentEpisodes;
     if (!episodes.length) {
@@ -1561,12 +1543,12 @@ function openIframeModal() {
                 <h2 class="text-xl font-bold gradient-text">iframe 预览 - ${currentVideoTitle || '视频'}</h2>
                 <button onclick="document.getElementById('iframePreviewModal').remove()" class="text-gray-400 hover:text-white text-2xl transition-colors">×</button>
             </div>
-            <div class="flex flex-1 min-h-0 overflow-hidden">
-                <div class="w-64 border-r border-[#333] overflow-y-auto p-2 flex-shrink-0">
+            <div class="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
+                <div class="w-full md:w-64 h-28 md:h-auto border-b md:border-b-0 md:border-r border-[#333] overflow-x-auto md:overflow-y-auto p-2 flex-shrink-0 flex md:flex-col gap-1">
                     ${episodes.map((ep, idx) => {
                         const realIdx = episodesReversed ? currentEpisodes.length - 1 - idx : idx;
                         return `<button onclick="document.getElementById('previewIframe').src='${ep}'"
-                            class="w-full text-left px-3 py-2 mb-1 bg-[#222] hover:bg-[#333] border border-[#333] rounded text-sm transition-colors truncate">
+                            class="flex-shrink-0 md:w-full text-left px-3 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded text-sm transition-colors truncate">
                             第 ${realIdx + 1} 集
                         </button>`;
                     }).join('')}
