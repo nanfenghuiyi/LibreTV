@@ -404,7 +404,7 @@ async function initPlayer(videoUrl) {
     }
 
     // 将视频 URL 转换为带鉴权的代理 URL
-    const proxyVideoUrl = await convertToProxyUrlWithAuth(videoUrl);
+    const proxyVideoUrl = convertToProxyUrl(videoUrl);
 
     // 销毁旧实例
     if (art) {
@@ -968,16 +968,26 @@ function playNextEpisode() {
     }
 }
 
-// 将视频 URL 转换为代理 URL 格式（同步版本，不带鉴权）
+// 将视频 URL 转换为代理 URL 格式
 function convertToProxyUrl(url) {
     if (!url || typeof url !== 'string') return url;
     if (url.startsWith('http://') || url.startsWith('https://')) {
-        return `/proxy/${encodeURIComponent(url)}`;
+        const encodedUrl = encodeURIComponent(url);
+        let proxyUrl = `/proxy/${encodedUrl}`;
+        
+        // 尝试添加鉴权参数
+        const hash = window.__ENV__?.PASSWORD || localStorage.getItem('proxyAuthHash');
+        if (hash) {
+            const timestamp = Date.now();
+            proxyUrl += `?auth=${encodeURIComponent(hash)}&t=${timestamp}`;
+        }
+        
+        return proxyUrl;
     }
     return url;
 }
 
-// 将视频 URL 转换为带鉴权的代理 URL（异步版本）
+// 将视频 URL 转换为带鉴权的代理 URL（异步版本，优先使用 ProxyAuth）
 async function convertToProxyUrlWithAuth(url) {
     if (!url || typeof url !== 'string') return url;
     if (url.startsWith('http://') || url.startsWith('https://')) {
@@ -986,7 +996,8 @@ async function convertToProxyUrlWithAuth(url) {
         if (window.ProxyAuth && window.ProxyAuth.addAuthToProxyUrl) {
             return await window.ProxyAuth.addAuthToProxyUrl(proxyUrl);
         }
-        return proxyUrl;
+        // 降级到同步版本
+        return convertToProxyUrl(url);
     }
     return url;
 }

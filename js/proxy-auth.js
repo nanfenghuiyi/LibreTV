@@ -46,9 +46,16 @@ async function getPasswordHash() {
     }
     
     // 4. 如果用户没有设置密码，尝试使用环境变量中的密码哈希
-    if (window.__ENV__ && window.__ENV__.PASSWORD) {
+    // 注意：Cloudflare Pages 是静态部署，{{PASSWORD}} 不会被替换
+    if (window.__ENV__ && window.__ENV__.PASSWORD && window.__ENV__.PASSWORD !== '{{PASSWORD}}') {
         cachedPasswordHash = window.__ENV__.PASSWORD;
         return window.__ENV__.PASSWORD;
+    }
+    
+    // 5. Cloudflare Pages 部署时，尝试从其他途径获取密码
+    // 如果环境变量中有设置，这里会是一个提示
+    if (window.__ENV__ && window.__ENV__.PASSWORD === '{{PASSWORD}}') {
+        console.warn('Cloudflare Pages 部署：需要在 Cloudflare Pages 环境变量中设置 PASSWORD');
     }
     
     return null;
