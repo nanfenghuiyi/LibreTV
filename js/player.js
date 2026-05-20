@@ -995,7 +995,7 @@ function copyLinks() {
 }
 
 // 下载视频
-function downloadVideo() {
+async function downloadVideo() {
     const urlParams = new URLSearchParams(window.location.search);
     let videoUrl = urlParams.get('url') || '';
     
@@ -1008,20 +1008,45 @@ function downloadVideo() {
         return;
     }
     
+    // 与播放器保持一致，使用代理URL
+    const proxyUrl = convertToProxyUrl(videoUrl);
+    
     const videoTitle = currentVideoTitle || '视频';
     const episodeText = currentEpisodes.length > 0 ? `第${currentEpisodeIndex + 1}集` : '';
     const fileName = episodeText ? `${videoTitle}_${episodeText}` : videoTitle;
     
-    const a = document.createElement('a');
-    a.href = videoUrl;
-    a.download = fileName;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    
-    showToast('视频下载已开始', 'success');
+    // m3u8和普通视频统一使用fetch下载
+    try {
+        showToast('正在准备下载...', 'info');
+        
+        const response = await fetch(proxyUrl);
+        if (!response.ok) {
+            throw new Error(`下载失败: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        // 延迟释放blob URL
+        setTimeout(() => {
+            URL.revokeObjectURL(blobUrl);
+        }, 1000);
+        
+        const fileType = videoUrl.includes('.m3u8') ? 'm3u8索引文件' : '视频';
+        showToast(`${fileType}下载已开始`, 'success');
+    } catch (error) {
+        console.error('下载失败:', error);
+        // 降级方案：在新标签页打开代理链接
+        window.open(proxyUrl, '_blank');
+        showToast('已在新标签页打开视频，请右键另存为', 'info');
+    }
 }
 
 // 切换集数排序
