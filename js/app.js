@@ -71,6 +71,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 初始检查成人API选中状态
     setTimeout(checkAdultAPIsSelected, 100);
+
+    // 初始化返回顶部按钮
+    initBackToTop();
 });
 
 // 初始化API复选框
@@ -2032,3 +2035,24 @@ function filterByType(typeName) {
 }
 
 // 移除Node.js的require语句，因为这是在浏览器环境中运行的
+
+// 返回顶部按钮相关逻辑
+function initBackToTop() {
+    const backToTopBtn = document.getElementById('backToTopBtn');
+    if (!backToTopBtn) return;
+
+    window.addEventListener('scroll', function() {
+        if (window.scrollY > 300) {
+            backToTopBtn.classList.add('visible');
+        } else {
+            backToTopBtn.classList.remove('visible');
+        }
+    });
+}
+
+function scrollToTop() {
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
+}

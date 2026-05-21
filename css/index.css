@@ -57,6 +57,31 @@
     background: #191919;
 }
 
+/* 最近搜索记录容器样式 - 显示三行，超出可滚动 */
+#recentSearches {
+    max-height: 6rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* 自定义滚动条样式 */
+#recentSearches::-webkit-scrollbar {
+    width: 4px;
+}
+
+#recentSearches::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#recentSearches::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.3);
+    border-radius: 2px;
+}
+
+#recentSearches::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.5);
+}
+
 /* 最近搜索记录样式 */
 .recent-search-tag {
     display: inline-block;
@@ -206,4 +231,17 @@
     .search-results-grid {
         grid-template-columns: repeat(4, 1fr);
     }
+}
+
+/* 返回顶部按钮样式 */
+#backToTopBtn {
+    transform: translateY(20px);
+    pointer-events: none;
+}
+
+#backToTopBtn.visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: translateY(0);
+    pointer-events: auto;
 }
