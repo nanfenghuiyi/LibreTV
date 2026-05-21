@@ -397,10 +397,14 @@ function showShortcutHint(text, direction) {
 }
 
 // 初始化播放器
-function initPlayer(videoUrl) {
+// 异步初始化播放器（支持鉴权）
+async function initPlayer(videoUrl) {
     if (!videoUrl) {
         return
     }
+
+    // 将视频 URL 转换为带鉴权的代理 URL
+    const proxyVideoUrl = convertToProxyUrl(videoUrl);
 
     // 销毁旧实例
     if (art) {
@@ -440,7 +444,7 @@ function initPlayer(videoUrl) {
     // Create new ArtPlayer instance
     art = new Artplayer({
         container: '#player',
-        url: videoUrl,
+        url: proxyVideoUrl,
         type: 'm3u8',
         title: videoTitle,
         volume: 0.8,
@@ -509,7 +513,7 @@ function initPlayer(videoUrl) {
                     }
                 });
 
-                hls.loadSource(url);
+                hls.loadSource(proxyVideoUrl);
                 hls.attachMedia(video);
 
                 // enable airplay, from https://github.com/video-dev/hls.js/issues/5989
@@ -517,11 +521,11 @@ function initPlayer(videoUrl) {
                 let sourceElement = video.querySelector('source');
                 if (sourceElement) {
                     // 更新现有source元素的URL
-                    sourceElement.src = videoUrl;
+                    sourceElement.src = proxyVideoUrl;
                 } else {
                     // 创建新的source元素
                     sourceElement = document.createElement('source');
-                    sourceElement.src = videoUrl;
+                    sourceElement.src = proxyVideoUrl;
                     video.appendChild(sourceElement);
                 }
                 video.disableRemotePlayback = false;
@@ -964,60 +968,92 @@ function playNextEpisode() {
     }
 }
 
+// 将视频 URL 转换为代理 URL 格式（支持鉴权参数）
+function convertToProxyUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+        const encodedUrl = encodeURIComponent(url);
+        const hash = window.__ENV__?.PASSWORD || localStorage.getItem('proxyAuthHash');
+        
+        if (hash) {
+            const timestamp = Date.now();
+            // 鉴权参数作为查询参数传递，不影响路径解析
+            return `/proxy/${encodedUrl}?auth=${encodeURIComponent(hash)}&t=${timestamp}`;
+        }
+        
+        return `/proxy/${encodedUrl}`;
+    }
+    return url;
+}
+
+// 将视频 URL 转换为带鉴权的代理 URL（异步版本，优先使用 ProxyAuth）
+async function convertToProxyUrlWithAuth(url) {
+    // 直接复用同步版本，因为 convertToProxyUrl 已支持鉴权
+    return convertToProxyUrl(url);
+}
+
 // 复制播放链接
 function copyLinks() {
-    // 尝试从URL中获取参数
     const urlParams = new URLSearchParams(window.location.search);
-    const linkUrl = urlParams.get('url') || '';
+    let linkUrl = urlParams.get('url') || '';
+    if (!linkUrl && currentVideoUrl) {
+        linkUrl = currentVideoUrl;
+    }
     if (linkUrl !== '') {
         navigator.clipboard.writeText(linkUrl).then(() => {
             showToast('播放链接已复制', 'success');
         }).catch(err => {
             showToast('复制失败，请检查浏览器权限', 'error');
         });
+    } else {
+        showToast('无法获取播放链接', 'error');
     }
 }
 
-// iframe弹窗预览
-function openIframeModal() {
-    const episodes = episodesReversed ? [...currentEpisodes].reverse() : currentEpisodes;
-    if (!episodes.length) {
-        showToast('暂无链接可预览', 'error');
+// 下载视频
+async function downloadVideo() {
+    const urlParams = new URLSearchParams(window.location.search);
+    let videoUrl = urlParams.get('url') || '';
+    
+    if (!videoUrl && currentVideoUrl) {
+        videoUrl = currentVideoUrl;
+    }
+    
+    if (!videoUrl) {
+        showToast('视频链接不存在', 'error');
         return;
     }
-
-    // 移除已存在的弹窗
-    const existing = document.getElementById('iframePreviewModal');
-    if (existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'iframePreviewModal';
-    modal.className = 'fixed inset-0 bg-black/80 hidden items-center justify-center z-[10002] transition-opacity duration-300';
-    modal.innerHTML = `
-        <div class="bg-[#111] rounded-lg border border-[#333] w-11/12 max-w-6xl h-[85vh] flex flex-col">
-            <div class="flex justify-between items-center p-4 border-b border-[#333] flex-none">
-                <h2 class="text-xl font-bold gradient-text">iframe 预览 - ${currentVideoTitle || '视频'}</h2>
-                <button onclick="document.getElementById('iframePreviewModal').remove()" class="text-gray-400 hover:text-white text-2xl transition-colors">×</button>
-            </div>
-            <div class="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
-                <div class="w-full md:w-64 h-28 md:h-auto border-b md:border-b-0 md:border-r border-[#333] overflow-x-auto md:overflow-y-auto p-2 flex-shrink-0 flex md:flex-col gap-1">
-                    ${episodes.map((ep, idx) => {
-                        const realIdx = episodesReversed ? currentEpisodes.length - 1 - idx : idx;
-                        return `<button onclick="document.getElementById('previewIframe').src='${ep}'"
-                            class="flex-shrink-0 md:w-full text-left px-3 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded text-sm transition-colors truncate">
-                            第 ${realIdx + 1} 集
-                        </button>`;
-                    }).join('')}
-                </div>
-                <div class="flex-1 min-h-0 bg-black relative">
-                    <iframe id="previewIframe" src="${episodes[0]}" class="w-full h-full border-0" sandbox="allow-same-origin allow-scripts allow-forms"></iframe>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
+    
+    const videoTitle = currentVideoTitle || '视频';
+    const episodeText = currentEpisodes.length > 0 ? `第${currentEpisodeIndex + 1}集` : '';
+    const fileName = episodeText ? `${videoTitle}_${episodeText}` : videoTitle;
+    
+    try {
+        const proxyUrl = await convertToProxyUrlWithAuth(videoUrl);
+        showToast('正在准备下载...', 'info');
+        
+        const response = await fetch(proxyUrl);
+        if (!response.ok) {
+            throw new Error(`下载失败: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        showToast('下载已开始', 'success');
+    } catch (error) {
+        console.error('下载失败:', error);
+        window.open(videoUrl, '_blank');
+        showToast('已在新标签页打开，请右键另存为', 'info');
+    }
 }
 
 // 切换集数排序

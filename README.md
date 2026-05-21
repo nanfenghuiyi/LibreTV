@@ -21,8 +21,8 @@ LibreTV 是一个轻量级、免费的在线视频搜索与观看平台，提供
 
 选择以下任一平台，点击一键部署按钮，即可快速创建自己的 LibreTV 实例：
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLibreSpark%2FLibreTV)  
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/LibreSpark/LibreTV)  
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FLibreSpark%2FLibreTV)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/LibreSpark/LibreTV)
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/LibreSpark/LibreTV)
 
 ## 🚨 重要声明
@@ -38,12 +38,11 @@ Pull Bot 会反复触发无效的 PR 和垃圾邮件，严重干扰项目维护�
 
 **推荐做法：**
 
-建议在 fork 的仓库中启用本仓库自带的 GitHub Actions 自动同步功能（见 `.github/workflows/sync.yml`）。 
+建议在 fork 的仓库中启用本仓库自带的 GitHub Actions 自动同步功能（见 `.github/workflows/sync.yml`）。
 
 如需手动同步主仓库更新，也可以使用 GitHub 官方的 [Sync fork](https://docs.github.com/cn/github/collaborating-with-issues-and-pull-requests/syncing-a-fork) 功能。
 
 对于更新后可能会出现的错误和异常，在设置中备份配置后，首先清除页面Cookie，然后 Ctrl + F5 刷新页面。再次访问网页检查是否解决问题。
-
 
 ## 📋 详细部署指南
 
@@ -66,8 +65,8 @@ Pull Bot 会反复触发无效的 PR 和垃圾邮件，严重干扰项目维护�
 4. **⚠️ 重要：在"Settings" > "Environment Variables"中添加 `PASSWORD` 变量（必须设置）**
 5. 点击"Deploy"
 
-
 ### Docker
+
 ```
 docker run -d \
   --name libretv \
@@ -92,11 +91,13 @@ services:
       - PASSWORD=${PASSWORD:-111111} # 可将 111111 修改为你想要的密码，默认为 your_password
     restart: unless-stopped
 ```
+
 启动 LibreTV：
 
 ```bash
 docker compose up -d
 ```
+
 访问 `http://localhost:8899` 即可使用。
 
 ### 本地开发环境
@@ -124,14 +125,15 @@ npm run dev
 
 **重要提示**: 为确保安全，所有部署都必须设置 PASSWORD 环境变量，否则用户将看到设置密码的提示。
 
-
 ### API兼容性
 
 LibreTV 支持标准的苹果 CMS V10 API 格式。添加自定义 API 时需遵循以下格式：
+
 - 搜索接口: `https://example.com/api.php/provide/vod/?ac=videolist&wd=关键词`
 - 详情接口: `https://example.com/api.php/provide/vod/?ac=detail&ids=视频ID`
 
 **添加 CMS 源**:
+
 1. 在设置面板中选择"自定义接口"
 2. 接口地址: `https://example.com/api.php/provide/vod`
 
@@ -166,11 +168,11 @@ LibreTV 仅作为视频搜索工具，不存储、上传或分发任何视频内
 
 它们提供了更多丰富的自定义功能，欢迎体验~
 
-- **[MoonTV](https://github.com/senshinya/MoonTV)**  
-- **[OrionTV](https://github.com/zimplexing/OrionTV)**  
+- **[MoonTV](https://github.com/senshinya/MoonTV)**
+- **[OrionTV](https://github.com/zimplexing/OrionTV)**
 
 ## 🥇 感谢支持
 
 - **[Sharon](https://sharon.io)**
 - **[ZMTO](https://zmto.com)**
-- **[YXVM](https://yxvm.com)**  
+- **[YXVM](https://yxvm.com)**

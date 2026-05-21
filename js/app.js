@@ -1361,9 +1361,14 @@ async function showDetails(id, vod_name, sourceCode) {
                         </button>
                         <span class="text-gray-400 text-sm">共 ${data.episodes.length} 集</span>
                     </div>
-                    <button onclick="copyLinks()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors">
-                        复制链接
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="copyLinks()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors">
+                            复制链接
+                        </button>
+                        <button onclick="openIframeModal()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm transition-colors">
+                            iframe预览
+                        </button>
+                    </div>
                 </div>
                 <div id="episodesGrid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
                     ${renderEpisodes(vod_name, sourceCode, id)}
@@ -1516,6 +1521,47 @@ function copyLinks() {
     }).catch(err => {
         showToast('复制失败，请检查浏览器权限', 'error');
     });
+}
+
+function openIframeModal() {
+    const episodes = episodesReversed ? [...currentEpisodes].reverse() : currentEpisodes;
+    if (!episodes.length) {
+        showToast('暂无链接可预览', 'error');
+        return;
+    }
+
+    // 移除已存在的弹窗
+    const existing = document.getElementById('iframePreviewModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'iframePreviewModal';
+    modal.className = 'fixed inset-0 bg-black/80 hidden flex items-center justify-center z-[10002] transition-opacity duration-300';
+    modal.innerHTML = `
+        <div class="bg-[#111] rounded-lg border border-[#333] w-11/12 max-w-6xl h-[85vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-[#333] flex-none">
+                <h2 class="text-xl font-bold gradient-text">iframe 预览 - ${currentVideoTitle || '视频'}</h2>
+                <button onclick="document.getElementById('iframePreviewModal').remove()" class="text-gray-400 hover:text-white text-2xl transition-colors">×</button>
+            </div>
+            <div class="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
+                <div class="w-full md:w-64 h-28 md:h-auto border-b md:border-b-0 md:border-r border-[#333] overflow-x-auto md:overflow-y-auto p-2 flex-shrink-0 flex md:flex-col gap-1">
+                    ${episodes.map((ep, idx) => {
+                        const realIdx = episodesReversed ? currentEpisodes.length - 1 - idx : idx;
+                        return `<button onclick="document.getElementById('previewIframe').src='${ep}'"
+                            class="flex-shrink-0 md:w-full text-left px-3 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded text-sm transition-colors truncate">
+                            第 ${realIdx + 1} 集
+                        </button>`;
+                    }).join('')}
+                </div>
+                <div class="flex-1 min-h-0 bg-black relative">
+                    <iframe id="previewIframe" src="${episodes[0]}" class="w-full h-full border-0" sandbox="allow-same-origin allow-scripts"></iframe>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
 }
 
 // 切换排序状态的函数
