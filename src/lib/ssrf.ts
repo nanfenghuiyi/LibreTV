@@ -1,5 +1,3 @@
-import dns from 'node:dns/promises';
-
 /** 判断 IP 是否为私有/回环/链路本地/保留地址（SSRF 防护） */
 export function isPrivateIP(ip: string): boolean {
   if (/^(127\.|0\.0\.0\.0$|::1$|fe80:|fc|fd)/i.test(ip)) return true;
@@ -30,6 +28,33 @@ export function isValidProxyUrl(urlString: string): boolean {
   }
 }
 
+/**
+ * 通过 DoH（DNS over HTTPS，Cloudflare JSON API）解析主机名的 A/AAAA 记录。
+ *
+ * 不使用 node:dns —— Cloudflare Workers（workerd）没有该模块；
+ * 纯 fetch 实现在 Node（Docker）与 Workers 下行为一致。
+ * 查询失败或超时返回空数组，由调用方按「解析失败不阻断」处理。
+ */
+async function resolveHostViaDoH(hostname: string): Promise<string[]> {
+  const addresses: string[] = [];
+  const query = async (type: 'A' | 'AAAA') => {
+    const res = await fetch(
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(hostname)}&type=${type}`,
+      { headers: { accept: 'application/dns-json' }, signal: AbortSignal.timeout(2000) }
+    );
+    if (!res.ok) return;
+    const data = (await res.json()) as { Answer?: Array<{ type: number; data: string }> };
+    // 仅取 A(1)/AAAA(28) 记录，跳过链路上的 CNAME(5)
+    for (const answer of data.Answer ?? []) {
+      if ((type === 'A' && answer.type === 1) || (type === 'AAAA' && answer.type === 28)) {
+        addresses.push(answer.data);
+      }
+    }
+  };
+  await Promise.allSettled([query('A'), query('AAAA')]);
+  return addresses;
+}
+
 /** DNS 解析后校验目标主机名是否解析到内网/保留地址 */
 export async function isBlockedByDNS(urlString: string): Promise<boolean> {
   try {
@@ -37,8 +62,8 @@ export async function isBlockedByDNS(urlString: string): Promise<boolean> {
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.includes(':')) {
       return isPrivateIP(hostname);
     }
-    const result = await dns.lookup(hostname, { all: true });
-    return result.some((r) => isPrivateIP(r.address));
+    const addresses = await resolveHostViaDoH(hostname);
+    return addresses.some((addr) => isPrivateIP(addr));
   } catch {
     return false; // 解析失败不阻断，交给后续请求处理
   }

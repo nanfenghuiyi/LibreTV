@@ -43,9 +43,9 @@ export async function GET(req: Request) {
         return jsonError(`节目单地址请求失败: ${res.status}`, 502);
       }
       // gzip 由 parseXmltv 内识别（fetch 对 .gz 不会自动解压）
-      const buf = Buffer.from(await res.arrayBuffer());
-      programMap = parseXmltv(buf, WINDOW_MS);
-      setLiveCache(key, programMap, CACHE_TTL_MS, buf.byteLength * 2);
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      programMap = await parseXmltv(bytes, WINDOW_MS);
+      setLiveCache(key, programMap, CACHE_TTL_MS, bytes.byteLength * 2);
     } catch (err) {
       return jsonError(`节目单地址请求失败: ${err instanceof Error ? err.message : '未知错误'}`, 502);
     }

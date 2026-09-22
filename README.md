@@ -67,6 +67,27 @@ docker compose pull && docker compose up -d
 
 > 版本号以 `package.json` 为单一来源，部署后可用 `/api/status` 返回的 `version` 字段核对。详见[部署文档](https://github.com/bestZwei/LibreTV-Next/wiki/Deployment)。
 
+### Cloudflare Workers（免费版）
+
+基于 [@opennextjs/cloudflare](https://opennext.js.org/cloudflare) 适配器，部署到 Workers（含静态资源），免费额度内可运行。
+
+```bash
+npm install
+
+# 本地预览（miniflare，无需登录 Cloudflare）
+npx wrangler secret put PASSWORD --local   # 本地写入 .wrangler 状态
+npm run preview
+
+# 登录并部署到线上
+npx wrangler login
+npx wrangler secret put PASSWORD           # 必填，交互式输入
+npm run deploy                             # 输出 https://libretv.<你的子域>.workers.dev
+```
+
+环境变量均通过机密/变量配置（`PASSWORD` 必填；`PROXY_SECRET`、`DEFAULT_SOURCES` 等可选），不在 `.env` 中配置。
+
+> ⚠️ **免费版限制**：每日 10 万次请求（HLS 分片经代理播放时每分片计一次）；单请求 CPU 10ms（正常观看足够）；单请求子请求上限 50 个（建议部署变量 `SEARCH_MAX_PAGES=2`）；内存级限流/缓存仅单实例生效。高播放量站点建议选用图片直连模式以节省请求配额。
+
 ### 手动运行
 
 ```bash

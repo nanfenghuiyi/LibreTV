@@ -1,0 +1,43 @@
+name: cloudflare-deploy
+
+# 推送版本 tag（如 v2.13.0）时自动构建并部署到 Cloudflare Workers；
+# 也可在 Actions 页面手动触发。
+#
+# 需要在仓库 Secrets 中配置：
+#   CLOUDFLARE_API_TOKEN  — API 令牌（权限：Account / Workers Scripts / Edit，
+#                           以及 Account Settings / Read）
+#   CLOUDFLARE_ACCOUNT_ID — Cloudflare 账户 ID
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      # 部署前先跑类型检查与单测，避免把坏版本推上线
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: 构建 OpenNext 产物
+        run: npx opennextjs-cloudflare build
+
+      - name: 部署到 Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy

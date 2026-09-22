@@ -1,4 +1,3 @@
-import { gunzipSync } from 'node:zlib';
 import type { EpgProgram } from './types';
 
 /**
@@ -38,6 +37,12 @@ function decodeXmlText(raw: string): string {
     .replace(/&amp;/g, '&');
 }
 
+/** 流式解压 gzip（Web 标准 API，Node 18+ 与 Cloudflare Workers 均支持） */
+async function gunzip(bytes: Uint8Array): Promise<string> {
+  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).text();
+}
+
 /** 解析 `YYYYMMDDHHmmss(.fff)?( +hhmm | Z)?` 为 epoch ms；无法解析返回 NaN */
 export function parseXmltvTime(raw: string): number {
   const m = raw
@@ -69,22 +74,21 @@ function extractAttrs(attrText: string): Record<string, string> {
 }
 
 /**
- * 解析 XMLTV 内容。string 直接入扫描；Buffer 自动识别 gzip（1f 8b 魔数）解压。
+ * 解析 XMLTV 内容。string 直接入扫描；二进制自动识别 gzip（1f 8b 魔数）流式解压。
  * 只保留 `[now, now + windowMs]` 窗口内的节目，按频道分组并按开播时间排序。
  */
-export function parseXmltv(
-  content: string | Buffer,
+export async function parseXmltv(
+  content: string | Uint8Array,
   windowMs: number = DEFAULT_WINDOW_MS,
   now: number = Date.now()
-): Map<string, EpgProgram[]> {
+): Promise<Map<string, EpgProgram[]>> {
   let text: string;
-  if (Buffer.isBuffer(content)) {
-    text =
-      content.length >= 2 && content[0] === 0x1f && content[1] === 0x8b
-        ? gunzipSync(content).toString('utf8')
-        : content.toString('utf8');
-  } else {
+  if (typeof content === 'string') {
     text = content;
+  } else if (content.length >= 2 && content[0] === 0x1f && content[1] === 0x8b) {
+    text = await gunzip(content);
+  } else {
+    text = new TextDecoder().decode(content);
   }
 
   const result = new Map<string, EpgProgram[]>();

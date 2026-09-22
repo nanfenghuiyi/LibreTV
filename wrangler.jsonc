@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Worker 名称：部署后地址为 https://libretv.<account>.workers.dev
+  "name": "libretv",
+  // OpenNext 构建产物入口
+  "main": ".open-next/worker.js",
+  // nodejs_compat 所需的最低兼容日期
+  "compatibility_date": "2024-09-23",
+  // nodejs_compat：使 node:crypto、Buffer 等 Node API 在 workerd 可用
+  // global_fetch_strictly_public：禁止 fetch 访问内部/回环地址，SSRF 纵深防护
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // 静态资源（Next.js 静态页面与公共文件）
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // 显式启用 workers.dev 公网路由（https://libretv.<account>.workers.dev）
+  "workers_dev": true,
+  // 关闭版本预览 URL，避免每个版本生成可公开访问的临时链接
+  "preview_urls": false,
+  "observability": {
+    "enabled": true
+  }
+  // 环境变量/机密（PASSWORD、PROXY_SECRET 等）不写入本文件：
+  // 本地用 `wrangler secret put PASSWORD`，线上在 Workers 控制台配置
+}
