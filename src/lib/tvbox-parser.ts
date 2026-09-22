@@ -10,7 +10,8 @@ import {
 
 /**
  * TVBOX 配置 JSON 的解析层：把 `sites` / `lives` 归一化为本站的 SourceListPayload，
- * 使同一份订阅入口同时兼容 LibreTV-SourceList 与 TVBOX 两种格式。
+ * 使同一份订阅入口同时兼容 LibreTV-SourceList、TVBOX 与 LunaTV 三种格式。
+ *（LunaTV 配置见 parseLunatvPayload。）
  *
  * 仅导入「直连类」条目（与本站现有能力对齐）：
  * - 点播：type=1 的 JSON 接口（即 Apple CMS 采集站）；部分共享配置省略 type 或写成 0，
@@ -71,17 +72,69 @@ function emptyStats(format: SubscriptionParseStats['format']): SubscriptionParse
   return { format, skipped: 0, skippedByReason: {}, truncated: 0 };
 }
 
+/** Base58（Bitcoin 变体）字母表：LunaTV 共享配置 format=2/3 用它编码 */
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+/** 文本是否像 Base58 编码的配置：无空白、不以 JSON 开头、字符全部落在 Base58 字母表内 */
+function looksLikeBase58(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 16 || /\s/.test(trimmed)) return false;
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return false;
+  return /^[1-9A-HJ-NP-Za-km-z]+$/.test(trimmed);
+}
+
+/**
+ * Base58 解码为 UTF-8 文本。fatal 解码失败（如对普通长字母数字
+ * 文本误判时解不出合法 UTF-8）返回 undefined。
+ */
+function decodeBase58(input: string): string | undefined {
+  let num = 0n;
+  for (const ch of input) {
+    const idx = BASE58_ALPHABET.indexOf(ch);
+    if (idx < 0) return undefined;
+    num = num * 58n + BigInt(idx);
+  }
+  let hex = num.toString(16);
+  if (hex.length % 2) hex = `0${hex}`;
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i += 1) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  // 前导 '1'（字母表值为 0）编码 0x00 字节
+  let leading = 0;
+  while (input[leading] === '1') leading += 1;
+  const full = new Uint8Array(leading + bytes.length);
+  full.set(bytes, leading);
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(full);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * 宽容 JSON 解析：部分共享配置带行注释、块注释或尾随逗号
  * （TVBOX 客户端用的 fastjson 默认容忍，标准 JSON.parse 会直接失败）。
  * 这里在字符串外部剥离这些痕迹后再解析，字符串内的 `//`（如 https://）不受影响。
+ * 另兼容 Base58 编码的整段 JSON（LunaTV 配置订阅 format=2/3）。
  */
 export function parseSubscriptionJson(text: string): unknown {
-  try {
-    return JSON.parse(stripJsonArtifacts(text.replace(/^\uFEFF/, '')));
-  } catch {
-    throw new Error('订阅内容不是合法的 JSON');
+  const tryParse = (raw: string): unknown => {
+    try {
+      return JSON.parse(stripJsonArtifacts(raw.replace(/^\uFEFF/, '')));
+    } catch {
+      return undefined;
+    }
+  };
+  const direct = tryParse(text);
+  if (direct !== undefined) return direct;
+  // LunaTV 配置 format=2/3：文本本身是 Base58 编码的 JSON，解码后再解析一次
+  if (looksLikeBase58(text)) {
+    const decoded = decodeBase58(text.trim());
+    const parsed = decoded !== undefined ? tryParse(decoded) : undefined;
+    if (parsed !== undefined) return parsed;
   }
+  throw new Error('订阅内容不是合法的 JSON');
 }
 
 /**
@@ -205,13 +258,81 @@ export function isTvboxPayload(json: unknown): boolean {
   return Array.isArray(record.sites) || Array.isArray(record.lives);
 }
 
+/** LunaTV 配置判别：顶层出现 api_site 对象即视为 LunaTV/MoonTV 配置订阅 */
+export function isLunatvPayload(json: unknown): boolean {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return false;
+  const apiSite = (json as Record<string, unknown>).api_site;
+  return !!apiSite && typeof apiSite === 'object' && !Array.isArray(apiSite);
+}
+
 /**
- * 解析订阅 JSON：自动识别格式（先判 TVBOX，后判 LibreTV-SourceList）。
- * 两者均不匹配时由 parseSourceListPayload 抛出格式错误。
+ * 解析订阅 JSON：自动识别格式（先判 TVBOX，再判 LunaTV，后判 LibreTV-SourceList）。
+ * 三者均不匹配时由 parseSourceListPayload 抛出格式错误。
  */
 export function parseSubscriptionPayload(json: unknown): SourceListPayload {
   if (isTvboxPayload(json)) return parseTvboxPayload(json);
+  if (isLunatvPayload(json)) return parseLunatvPayload(json);
   return { ...parseSourceListPayload(json), stats: emptyStats('libretv') };
+}
+
+/**
+ * 解析 LunaTV 配置：`api_site` 对象映射 → 本站点播源（无直播源概念）。
+ * value 为 { name?, api, detail? }，key 为站点标识，名称缺失时以 key 兜底。
+ * 条目均为 Apple CMS 采集接口，语义与 LibreTV-SourceList 一致：http(s) 地址
+ * 全部导入（不做 TVBOX 的 type 过滤），api 缺失/非法跳过并计入统计。
+ */
+export function parseLunatvPayload(json: unknown): SourceListPayload {
+  const record = (json ?? {}) as Record<string, unknown>;
+  const apiSite = (record.api_site ?? {}) as Record<string, unknown>;
+  const skipped: SkipCounter = { count: 0, byReason: {}, samples: [] };
+
+  const seen = new Set<string>();
+  const sources: SourceListPayload['sources'] = [];
+  let truncated = 0;
+
+  for (const [key, value] of Object.entries(apiSite)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      markSkipped(skipped, 'invalidUrl', key);
+      continue;
+    }
+    const site = value as Record<string, unknown>;
+    const url = normalizeUrl(site.api, true);
+    if (!url) {
+      markSkipped(skipped, 'invalidUrl', optionalString(site.name) || key);
+      continue;
+    }
+    if (seen.has(url)) continue; // 重复条目静默跳过，与既有订阅语义一致
+    if (sources.length >= MAX_VOD_SOURCES) {
+      truncated += 1;
+      continue;
+    }
+    seen.add(url);
+    sources.push({
+      name: optionalString(site.name) || key,
+      url,
+      detail: optionalString(site.detail),
+    });
+  }
+
+  if (sources.length === 0) {
+    throw new Error(
+      skipped.count > 0
+        ? `配置中没有可直接导入的源：已跳过 ${skipped.count} 个条目（${describeReasons(skipped.byReason)}）`
+        : '配置中没有可用的站点（api_site 为空）'
+    );
+  }
+
+  return {
+    sources,
+    liveSources: [],
+    stats: {
+      format: 'lunatv',
+      skipped: skipped.count,
+      skippedByReason: skipped.byReason,
+      skippedSamples: skipped.samples.length > 0 ? skipped.samples : undefined,
+      truncated,
+    },
+  };
 }
 
 /** 解析 TVBOX 配置：sites / lives → 本站点播源与直播源，附带跳过与截断统计 */

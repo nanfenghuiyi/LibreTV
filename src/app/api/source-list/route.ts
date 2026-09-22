@@ -8,10 +8,12 @@ import type { SourceListPayload } from '@/lib/types';
 export const runtime = 'nodejs';
 
 /**
- * 拉取远程数据源订阅，自动识别两种格式：
+ * 拉取远程数据源订阅，自动识别三种格式：
  * 1. LibreTV-SourceList JSON：{ name?, sources: [点播源], liveSources: [直播源] }（也接受裸数组与老格式）；
  * 2. TVBOX 配置 JSON：{ sites: [站点], lives: [直播源] }，仅导入直连类条目
- *    （type=1 的 Apple CMS 接口与 M3U 直播），Spider / XML 等跳过并计入统计。
+ *    （type=1 的 Apple CMS 接口与 M3U 直播），Spider / XML 等跳过并计入统计；
+ * 3. LunaTV/MoonTV 配置 JSON：{ api_site: { key: { name?, api, detail? } } }，条目为
+ *    Apple CMS 接口，整体转为点播源导入。
  *
  * 点播源与直播源的地址放行策略不同（点播一律拒绝内网，直播可用 LIVE_ALLOW_PRIVATE 放行），
  * 因此两类分别校验，不能共用一把尺子；被校验拦下的条目同样计入统计，便于前端说明导入结果。

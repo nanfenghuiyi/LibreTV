@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { MAX_LIVE_SOURCES, MAX_VOD_SOURCES } from './source-list';
 import {
   describeParseStats,
+  isLunatvPayload,
   isTvboxPayload,
   parseSubscriptionJson,
   parseSubscriptionPayload,
+  parseLunatvPayload,
   parseTvboxPayload,
   withSkipped,
 } from './tvbox-parser';
@@ -175,6 +177,92 @@ describe('parseTvboxPayload', () => {
   });
 });
 
+describe('isLunatvPayload', () => {
+  it('顶层含 api_site 对象即判定为 LunaTV 配置', () => {
+    expect(isLunatvPayload({ api_site: { key: { api: 'https://a.example.com' } } })).toBe(true);
+    expect(isLunatvPayload({ cache_time: 7200, api_site: {} })).toBe(true);
+  });
+
+  it('TVBOX / LibreTV 订阅与非法输入不误判', () => {
+    expect(isLunatvPayload({ sites: [] })).toBe(false);
+    expect(isLunatvPayload({ sources: [] })).toBe(false);
+    expect(isLunatvPayload({ api_site: [] })).toBe(false);
+    expect(isLunatvPayload(null)).toBe(false);
+    expect(isLunatvPayload('text')).toBe(false);
+  });
+});
+
+describe('parseLunatvPayload', () => {
+  it('api_site 条目转为点播源：name/detail 保留，名称缺失用 key 兜底', () => {
+    const result = parseLunatvPayload({
+      cache_time: 7200,
+      api_site: {
+        dbzy: { name: '🎬豆瓣资源', api: 'https://caiji.dbzy5.com/api.php/provide/vod', detail: 'https://dbzy.tv' },
+        'qiqi.example.com': { api: 'https://www.qiqidys.com/api.php/provide/vod' },
+      },
+    });
+
+    expect(result.sources).toEqual([
+      {
+        name: '🎬豆瓣资源',
+        url: 'https://caiji.dbzy5.com/api.php/provide/vod',
+        detail: 'https://dbzy.tv',
+      },
+      {
+        name: 'qiqi.example.com',
+        url: 'https://www.qiqidys.com/api.php/provide/vod',
+        detail: undefined,
+      },
+    ]);
+    expect(result.liveSources).toEqual([]);
+    expect(result.stats).toMatchObject({ format: 'lunatv', skipped: 0, truncated: 0 });
+  });
+
+  it('api 缺失或非 http(s) 的条目跳过并计入 invalidUrl', () => {
+    const result = parseLunatvPayload({
+      api_site: {
+        ok: { name: '正常站', api: 'https://ok.example.com/api.php/provide/vod' },
+        noApi: { name: '缺地址' },
+        badApi: { name: '坏地址', api: 'ftp://bad.example.com/vod' },
+        notObject: 'https://plain.example.com/vod',
+      },
+    });
+
+    expect(result.sources.map((s) => s.name)).toEqual(['正常站']);
+    expect(result.stats?.skipped).toBe(3);
+    expect(result.stats?.skippedByReason).toEqual({ invalidUrl: 3 });
+    expect(result.stats?.skippedSamples).toEqual(['缺地址', '坏地址', 'notObject']);
+  });
+
+  it('含代理前缀的 CMS 接口照常导入，重复地址静默去重', () => {
+    const result = parseLunatvPayload({
+      api_site: {
+        a: { name: '直连', api: 'https://a.example.com/api.php/provide/vod' },
+        proxied: { name: '代理', api: 'https://proxy.example.com/?url=https://b.example.com/api.php/provide/vod' },
+        dup: { name: '重复', api: 'https://a.example.com/api.php/provide/vod' },
+      },
+    });
+
+    expect(result.sources).toHaveLength(2);
+    expect(result.stats?.skipped).toBe(0);
+  });
+
+  it('超出上限时截断，全部不可导入时抛错', () => {
+    const apiSite: Record<string, unknown> = {};
+    for (let i = 0; i < MAX_VOD_SOURCES + 3; i++) {
+      apiSite[`site${i}`] = { name: `站点${i}`, api: `https://vod${i}.example.com/api.php/provide/vod` };
+    }
+    const truncated = parseLunatvPayload({ api_site: apiSite });
+    expect(truncated.sources).toHaveLength(MAX_VOD_SOURCES);
+    expect(truncated.stats?.truncated).toBe(3);
+
+    expect(() => parseLunatvPayload({ api_site: { bad: { name: '坏地址', api: 'ftp://x.example.com/vod' } } })).toThrow(
+      /已跳过 1 个条目/
+    );
+    expect(() => parseLunatvPayload({ api_site: {} })).toThrow(/api_site 为空/);
+  });
+});
+
 describe('parseSubscriptionPayload', () => {
   it('TVBOX 配置走 TVBOX 分支', () => {
     const result = parseSubscriptionPayload({
@@ -198,6 +286,17 @@ describe('parseSubscriptionPayload', () => {
     expect(result.sources).toHaveLength(1);
     expect(result.liveSources).toHaveLength(1);
     expect(result.stats).toEqual({ format: 'libretv', skipped: 0, skippedByReason: {}, truncated: 0 });
+  });
+
+  it('LunaTV 配置走 LunaTV 分支', () => {
+    const result = parseSubscriptionPayload({
+      cache_time: 7200,
+      api_site: { dbzy: { name: '豆瓣资源', api: 'https://caiji.dbzy5.com/api.php/provide/vod' } },
+    });
+
+    expect(result.stats?.format).toBe('lunatv');
+    expect(result.sources).toHaveLength(1);
+    expect(result.liveSources).toEqual([]);
   });
 
   it('裸数组老格式仍按 LibreTV 解析', () => {
@@ -272,4 +371,35 @@ describe('parseSubscriptionJson', () => {
   it('非法内容抛出可读错误', () => {
     expect(() => parseSubscriptionJson('<html>403 Forbidden</html>')).toThrow(/不是合法的 JSON/);
   });
+
+  it('Base58 编码的整段 JSON（LunaTV format=2/3）解码后解析', () => {
+    const config = {
+      cache_time: 7200,
+      api_site: {
+        dbzy: { name: '🎬豆瓣资源', api: 'https://caiji.dbzy5.com/api.php/provide/vod', detail: 'https://dbzy.tv' },
+      },
+    };
+    const encoded = encodeBase58(JSON.stringify(config));
+
+    const json = parseSubscriptionJson(encoded) as typeof config;
+    expect(json.api_site.dbzy.api).toBe('https://caiji.dbzy5.com/api.php/provide/vod');
+  });
+
+  it('Base58 形似但解不出 JSON 的文本仍报错', () => {
+    expect(() => parseSubscriptionJson('zzzzzzzzzzzzzzzz')).toThrow(/不是合法的 JSON/);
+  });
 });
+
+/** 测试辅助：UTF-8 → Base58（Bitcoin 字母表），与 decodeBase58 互为逆运算 */
+function encodeBase58(text: string): string {
+  const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  const bytes = new TextEncoder().encode(text);
+  let num = 0n;
+  for (const b of bytes) num = num * 256n + BigInt(b);
+  let out = '';
+  while (num > 0n) {
+    out = ALPHABET[Number(num % 58n)] + out;
+    num /= 58n;
+  }
+  return out;
+}

@@ -172,7 +172,7 @@ export type SubscriptionSkipReason =
 /** 订阅解析统计：说明跳过与截断情况，用于导入结果提示 */
 export interface SubscriptionParseStats {
   /** 识别出的订阅格式 */
-  format: 'libretv' | 'tvbox';
+  format: 'libretv' | 'tvbox' | 'lunatv';
   /** 被跳过的条目总数 */
   skipped: number;
   /** 跳过原因分类计数 */
