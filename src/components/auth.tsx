@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, onUnauthorized, STATUS_QUERY_KEY } from '@/lib/client-api';
-import { applyEnvPresets } from '@/lib/subscription-sync';
+import { applyEnvPresets, syncSharedSources } from '@/lib/subscription-sync';
 import type { AuthStatusResponse } from '@/lib/types';
 import { useToast } from './toast';
 
@@ -109,6 +109,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           staleTime: 0,
         }));
       if (status) await applyEnvPresets(status);
+      // 站点共享源（管理员存于 D1）：登录成功后拉取合入（首屏会话无效时未拉取过）
+      void syncSharedSources();
     } catch {
       // 补拉预置数据失败不影响登录后的正常使用
     }

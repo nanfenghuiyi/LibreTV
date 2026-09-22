@@ -174,6 +174,12 @@ interface AppState extends AppSettings {
   envSources: SourceConfig[];
   /** 已向用户展示过并自动勾选过的预置源 key（持久化：用户取消勾选后不再反复勾上） */
   envKeysSeen: string[];
+  /** 站点共享源（管理员存于 D1，服务端下发，不持久化；仅配置了 D1 的部署可用） */
+  sharedSources: SourceConfig[];
+  /** 站点共享直播源（同上） */
+  sharedLiveSources: LiveSourceConfig[];
+  /** 已向用户展示过并自动勾选过的共享源 key（持久化：用户取消勾选后不再反复勾上） */
+  sharedKeysSeen: string[];
   subscriptions: SourceSubscription[];
   /** —— 直播模块 —— */
   /** 部署者通过 DEFAULT_LIVE_SOURCES 预置的直播源（服务端下发，不持久化） */
@@ -203,6 +209,7 @@ interface AppState extends AppSettings {
   toggleSourceSelected: (key: string) => void;
   setSelectedKeys: (keys: string[]) => void;
   setEnvSources: (list: SourceConfig[]) => void;
+  setSharedSources: (sources: SourceConfig[], liveSources: LiveSourceConfig[]) => void;
   addSubscription: (url: string, name?: string) => void;
   removeSubscription: (url: string) => void;
   /** 整体启用/停用某个订阅（停用只影响搜索时是否采用，不动各源的勾选状态） */
@@ -248,9 +255,15 @@ interface AppState extends AppSettings {
   updateSettings: (patch: Partial<Omit<AppSettings, 'customAPIs' | 'selectedKeys'>>) => void;
 }
 
-/** 全部可用直播源（预置 + 用户订阅）合并视图 */
-export function allLiveSources(state: Pick<AppState, 'liveEnvSources' | 'liveSubscriptions'>): LiveSourceConfig[] {
-  return [...state.liveEnvSources, ...state.liveSubscriptions.map((s) => ({ key: `sub_${s.url}`, name: s.name || s.url, url: s.url, epg: s.epg }))];
+/** 全部可用直播源（预置 + 站点共享 + 用户订阅）合并视图 */
+export function allLiveSources(
+  state: Pick<AppState, 'liveEnvSources' | 'sharedLiveSources' | 'liveSubscriptions'>
+): LiveSourceConfig[] {
+  return [
+    ...state.liveEnvSources,
+    ...state.sharedLiveSources,
+    ...state.liveSubscriptions.map((s) => ({ key: `sub_${s.url}`, name: s.name || s.url, url: s.url, epg: s.epg })),
+  ];
 }
 
 function nextCustomKey(apiList: SourceConfig[]): string {
@@ -319,6 +332,9 @@ export const useAppStore = create<AppState>()(
       customAPIs: [],
       envSources: [],
       envKeysSeen: [],
+      sharedSources: [],
+      sharedLiveSources: [],
+      sharedKeysSeen: [],
       subscriptions: [],
       liveEnvSources: [],
       liveEnvKeysSeen: [],
@@ -386,7 +402,7 @@ export const useAppStore = create<AppState>()(
           return;
         }
         // 成人内容过滤开启时不允许勾选成人源
-        const src = [...get().customAPIs, ...get().envSources].find((a) => a.key === key);
+        const src = [...get().customAPIs, ...get().envSources, ...get().sharedSources].find((a) => a.key === key);
         if (src?.isAdult && get().yellowFilter) return;
         set({ selectedKeys: [...cur, key] });
       },
@@ -406,6 +422,25 @@ export const useAppStore = create<AppState>()(
           envSources: list,
           envKeysSeen: [...get().envKeysSeen, ...freshKeys],
           selectedKeys: [...get().selectedKeys, ...toSelect],
+        });
+      },
+
+      setSharedSources: (sources, liveSources) => {
+        // 与预置源一致：首次出现自动勾选（成人源受过滤约束），用户取消勾选后不反复勾回
+        const seen = new Set(get().sharedKeysSeen);
+        const freshKeys = sources.map((s) => s.key).filter((k) => !seen.has(k));
+        const toSelect = freshKeys.filter((k) => {
+          const src = sources.find((s) => s.key === k);
+          return !src?.isAdult || !get().yellowFilter;
+        });
+        // 共享直播源首次出现时自动启用（按订阅 URL 唯一标识）
+        const freshUrls = liveSources.filter((s) => !seen.has(s.key)).map((s) => s.url);
+        set({
+          sharedSources: sources,
+          sharedLiveSources: liveSources,
+          sharedKeysSeen: [...get().sharedKeysSeen, ...freshKeys],
+          selectedKeys: [...get().selectedKeys, ...toSelect],
+          liveSelectedUrls: [...new Set([...get().liveSelectedUrls, ...freshUrls])],
         });
       },
 
@@ -731,7 +766,7 @@ export const useAppStore = create<AppState>()(
         // 打开成人内容过滤时，同步取消勾选所有成人源，避免两者并存
         if (patch.yellowFilter === true) {
           const adultKeys = new Set(
-            [...get().customAPIs, ...get().envSources]
+            [...get().customAPIs, ...get().envSources, ...get().sharedSources]
               .filter((s) => s.isAdult)
               .map((s) => s.key)
           );
@@ -782,6 +817,7 @@ export const useAppStore = create<AppState>()(
         customAPIs: s.customAPIs,
         selectedKeys: s.selectedKeys,
         envKeysSeen: s.envKeysSeen,
+        sharedKeysSeen: s.sharedKeysSeen,
         subscriptions: s.subscriptions,
         liveEnvKeysSeen: s.liveEnvKeysSeen,
         liveSubscriptions: s.liveSubscriptions,
@@ -832,11 +868,14 @@ export async function hydrateLiveProbeResults(): Promise<void> {
 
 /** 获取指定 key 的源配置；找不到时支持从 URL 参数兜底构造 */
 export function resolveSource(
-  store: Pick<AppState, 'customAPIs' | 'envSources'>,
+  store: Pick<AppState, 'customAPIs' | 'envSources' | 'sharedSources'>,
   key: string,
   fallback?: { url?: string; detail?: string; name?: string }
 ): SourceConfig | undefined {
-  const found = store.customAPIs.find((a) => a.key === key) ?? store.envSources.find((a) => a.key === key);
+  const found =
+    store.customAPIs.find((a) => a.key === key) ??
+    store.envSources.find((a) => a.key === key) ??
+    store.sharedSources.find((a) => a.key === key);
   if (found) return found;
   if (fallback?.url) {
     return {

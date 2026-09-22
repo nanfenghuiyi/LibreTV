@@ -8,7 +8,7 @@ vi.mock('./db', () => ({
   saveLiveProbeResults: vi.fn(async () => {}),
 }));
 
-import { isInDisabledSubscription, isSourceDisabled, keyBelongsToSubscription, SOURCE_DISABLE_LADDER, subKeyPrefix, useAppStore } from './store';
+import { isInDisabledSubscription, isSourceDisabled, keyBelongsToSubscription, resolveSource, SOURCE_DISABLE_LADDER, subKeyPrefix, useAppStore } from './store';
 import type { SourceConfig } from './types';
 
 const store = () => useAppStore.getState();
@@ -362,5 +362,66 @@ describe('订阅整体开关', () => {
     expect(isInDisabledSubscription(store(), `${subKeyPrefix(subUrl)}_1`)).toBe(true);
     expect(isInDisabledSubscription(store(), `${subKeyPrefix(otherUrl)}_1`)).toBe(false);
     expect(isInDisabledSubscription(store(), 'manual_0')).toBe(false);
+  });
+});
+
+describe('setSharedSources 站点共享源', () => {
+  const liveUrl = 'https://live.example.com/shared.m3u';
+  const vod = { key: 'shared_vod_a', name: '共享源', url: 'https://a.example.com/api.php/provide/vod' };
+
+  beforeEach(() => {
+    useAppStore.setState({
+      customAPIs: [],
+      envSources: [],
+      sharedSources: [],
+      sharedLiveSources: [],
+      sharedKeysSeen: [],
+      selectedKeys: [],
+      liveSelectedUrls: [],
+      yellowFilter: false,
+    });
+  });
+
+  it('写入共享点播源与直播源：自动勾选点播、自动启用直播', () => {
+    store().setSharedSources([vod], [{ key: 'shared_live_b', name: '共享直播', url: liveUrl }]);
+
+    const s = store();
+    expect(s.sharedSources.map((x) => x.key)).toEqual([vod.key]);
+    expect(s.sharedLiveSources.map((x) => x.url)).toEqual([liveUrl]);
+    expect(s.selectedKeys).toContain(vod.key);
+    expect(s.liveSelectedUrls).toContain(liveUrl);
+    expect(s.sharedKeysSeen).toContain(vod.key);
+  });
+
+  it('幂等：重复下发不会重复启用直播源', () => {
+    const live = { key: 'shared_live_b', name: '共享直播', url: liveUrl };
+    store().setSharedSources([], [live]);
+    store().setSharedSources([], [live]);
+    expect(store().liveSelectedUrls.filter((u) => u === liveUrl)).toHaveLength(1);
+  });
+
+  it('用户取消勾选后，再次下发不会把该源勾回', () => {
+    store().setSharedSources([vod], []);
+    store().toggleSourceSelected(vod.key);
+    expect(store().selectedKeys).not.toContain(vod.key);
+
+    store().setSharedSources([vod], []);
+    expect(store().selectedKeys).not.toContain(vod.key);
+  });
+
+  it('成人过滤开启时，成人共享源不自动勾选', () => {
+    useAppStore.setState({ yellowFilter: true });
+    store().setSharedSources([{ ...vod, key: 'shared_vod_x', isAdult: true }], []);
+    expect(store().selectedKeys).not.toContain('shared_vod_x');
+  });
+
+  it('resolveSource 能解析共享源；成人共享源同样受勾选守卫限制', () => {
+    store().setSharedSources([vod], []);
+    expect(resolveSource(store(), vod.key)).toEqual(vod);
+
+    // 成人过滤开启时不可勾选成人共享源
+    useAppStore.setState({ yellowFilter: true, sharedSources: [{ ...vod, key: 'shared_vod_x', isAdult: true }] });
+    store().toggleSourceSelected('shared_vod_x');
+    expect(store().selectedKeys).not.toContain('shared_vod_x');
   });
 });

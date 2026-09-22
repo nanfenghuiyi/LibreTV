@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Drawer } from './drawer';
 import { ConfirmDialog } from './confirm-dialog';
 import { Icon, type IconName } from './icon';
-import { LiveSourceManager } from './live-source-manager';
+import { LiveSourceManager, LiveSourceForm } from './live-source-manager';
 import {
   HealthBadge,
   SearchInput,
@@ -25,7 +25,7 @@ import { formatRelativeTime, hostnameOf, validateSourceUrl, cn } from '@/lib/uti
 import { exportConfig, importConfig } from '@/lib/db';
 import { useAuth } from './auth';
 import { api } from '@/lib/client-api';
-import { syncSourceSubscription } from '@/lib/subscription-sync';
+import { syncSharedSources, syncSourceSubscription } from '@/lib/subscription-sync';
 import { describeParseStats } from '@/lib/tvbox-parser';
 
 /**
@@ -36,7 +36,7 @@ import { describeParseStats } from '@/lib/tvbox-parser';
  */
 
 type PrimaryTab = 'sources' | 'prefs' | 'data';
-type SecondaryTab = 'vod' | 'live' | 'subs' | 'playback' | 'image' | 'home' | 'io';
+type SecondaryTab = 'vod' | 'live' | 'subs' | 'shared' | 'playback' | 'image' | 'home' | 'io';
 
 const PRIMARY_TABS: { id: PrimaryTab; label: string; icon: IconName }[] = [
   { id: 'sources', label: '源管理', icon: 'link' },
@@ -49,6 +49,7 @@ const SECONDARY_TABS: Record<PrimaryTab, { id: SecondaryTab; label: string }[]> 
     { id: 'vod', label: '点播源' },
     { id: 'live', label: '直播源' },
     { id: 'subs', label: '数据源订阅' },
+    { id: 'shared', label: '站点共享源' },
   ],
   prefs: [
     { id: 'playback', label: '播放与过滤' },
@@ -129,6 +130,7 @@ export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose:
     >
       {current === 'vod' && <VodSourcesPanel />}
       {current === 'live' && <LiveSourceManager />}
+      {current === 'shared' && <SharedSourcesPanel />}
       {current === 'playback' && <PlaybackPanel />}
       {current === 'image' && <ImagePanel />}
       {current === 'home' && <HomePanel />}
@@ -225,7 +227,11 @@ function VodSourcesPanel() {
   const { progress, probe, cancel, isProbing } = useSourceProbe();
 
   const envKeys = useMemo(() => new Set(store.envSources.map((s) => s.key)), [store.envSources]);
-  const all = useMemo(() => [...store.envSources, ...store.customAPIs], [store.envSources, store.customAPIs]);
+  const sharedKeys = useMemo(() => new Set(store.sharedSources.map((s) => s.key)), [store.sharedSources]);
+  const all = useMemo(
+    () => [...store.envSources, ...store.sharedSources, ...store.customAPIs],
+    [store.envSources, store.sharedSources, store.customAPIs]
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -235,12 +241,12 @@ function VodSourcesPanel() {
       if (filter === 'enabled' && !(store.selectedKeys.includes(s.key) && !isSourceDisabled(store, s.key))) return false;
       if (filter === 'disabled' && !isSourceDisabled(store, s.key)) return false;
       if (filter === 'sub' && !fromSub) return false;
-      // 手动添加 = 既非订阅导入、也非部署者预置
-      if (filter === 'manual' && (fromSub || envKeys.has(s.key))) return false;
+      // 手动添加 = 既非订阅导入、也非部署者预置、也非站点共享
+      if (filter === 'manual' && (fromSub || envKeys.has(s.key) || sharedKeys.has(s.key))) return false;
       if (!q) return true;
       return s.name.toLowerCase().includes(q) || s.url.toLowerCase().includes(q);
     });
-  }, [all, query, filter, store, envKeys]);
+  }, [all, query, filter, store, envKeys, sharedKeys]);
 
   const visibleKeys = filtered.map((s) => s.key);
   const allSelected = visibleKeys.length > 0 && visibleKeys.every((k) => store.selectedKeys.includes(k));
@@ -275,7 +281,8 @@ function VodSourcesPanel() {
     toast(`已恢复 ${keys.length} 个源`, 'success');
   };
 
-  const empty = store.envSources.length === 0 && store.customAPIs.length === 0;
+  const empty =
+    store.envSources.length === 0 && store.sharedSources.length === 0 && store.customAPIs.length === 0;
 
   return (
     <section>
@@ -376,6 +383,7 @@ function VodSourcesPanel() {
                   key={source.key}
                   api={source}
                   isEnv={envKeys.has(source.key)}
+                  isShared={sharedKeys.has(source.key)}
                   editing={editing === source.key}
                   onEdit={setEditing}
                   onCancelEdit={() => setEditing(null)}
@@ -411,10 +419,11 @@ function formatEta(done: number, total: number, startedAt: number): string {
   return remainSec > 0 ? ` · 约 ${remainSec}s` : '';
 }
 
-/** 单条点播源行：勾选 / 名称标签 / 健康度 / 探活 / 编辑删除（订阅源与预置源按来源限制操作） */
+/** 单条点播源行：勾选 / 名称标签 / 健康度 / 探活 / 编辑删除（订阅源、预置源与站点共享源按来源限制操作） */
 function VodSourceRow({
   api,
   isEnv,
+  isShared,
   editing,
   onEdit,
   onCancelEdit,
@@ -424,6 +433,7 @@ function VodSourceRow({
 }: {
   api: SourceConfig;
   isEnv: boolean;
+  isShared: boolean;
   editing: boolean;
   onEdit: (key: string) => void;
   onCancelEdit: () => void;
@@ -487,6 +497,14 @@ function VodSourceRow({
                 部署者预置
               </span>
             )}
+            {isShared && (
+              <span
+                className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-chip text-faint align-middle"
+                title="站点共享源：由站点管理员配置，所有登录访客可用"
+              >
+                站点共享
+              </span>
+            )}
             {fromSubscription && (
               <span
                 className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent align-middle"
@@ -506,6 +524,7 @@ function VodSourceRow({
           badgeWhenOk={({ ms }) => `✓ ${ms}ms`}
         />
         {!isEnv &&
+          !isShared &&
           (fromSubscription ? (
             // 订阅源由远端列表管理：编辑会被下次同步覆盖、删除会复活，故置为禁用态并说明去处
             <>
@@ -548,6 +567,235 @@ function VodSourceRow({
           ))}
       </div>
     </li>
+  );
+}
+
+// —— 站点共享源面板（管理员编辑，存于 Cloudflare D1；未配置 D1 的部署不可用） ——
+
+type DraftVod = { name: string; url: string; detail?: string; isAdult?: boolean };
+type DraftLive = { name?: string; url: string; epg?: string };
+
+function SharedSourcesPanel() {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [available, setAvailable] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+  const [sources, setSources] = useState<DraftVod[]>([]);
+  const [liveSources, setLiveSources] = useState<DraftLive[]>([]);
+  const [saving, setSaving] = useState(false);
+  /** 表单展开状态：null=收起；-1=新增；>=0=编辑该下标 */
+  const [vodEdit, setVodEdit] = useState<number | null>(null);
+  const [liveEdit, setLiveEdit] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(false);
+    api
+      .getSharedSources()
+      .then(({ available, config }) => {
+        if (cancelled) return;
+        setAvailable(available);
+        if (config) {
+          setUpdatedAt(config.updatedAt ?? null);
+          setSources(config.sources.map((s) => ({ name: s.name, url: s.url, detail: s.detail, isAdult: s.isAdult })));
+          setLiveSources(config.liveSources.map((s) => ({ name: s.name, url: s.url, epg: s.epg })));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 整体覆盖保存：PUT 即全量生效，无 D1 的部署由服务端拒绝并给出明确错误
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      // 服务端要求直播源名称非空，未填时以主机名兜底（与订阅导入的展示规则一致）
+      await api.saveSharedSources({
+        sources,
+        liveSources: liveSources.map((s) => ({ ...s, name: s.name || hostnameOf(s.url) })),
+      });
+      toast('共享源已保存，全站登录访客生效', 'success');
+      // 立即把最新配置合入本地 store（新增共享源对本人自动勾选）
+      void syncSharedSources();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '保存失败', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="py-10 flex justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <EmptyState
+        icon="alert"
+        title="共享源配置加载失败"
+        description="请确认已登录后重试。"
+        action={
+          <button className="btn-primary btn-sm" onClick={() => window.location.reload()}>
+            重新加载
+          </button>
+        }
+      />
+    );
+  }
+
+  if (!available) {
+    return (
+      <EmptyState
+        icon="link"
+        title="当前部署不支持站点共享源"
+        description="仅在配置了 Cloudflare D1 数据库绑定的部署上可用（Docker/Node 部署请改用环境变量预置源）。"
+      />
+    );
+  }
+
+  const dirtyCount = sources.length + liveSources.length;
+
+  return (
+    <section>
+      <SectionTitle
+        title="站点共享源"
+        hint={`${dirtyCount > 0 ? `共 ${dirtyCount} 个` : '尚未配置'}${updatedAt ? ` · 更新于 ${formatRelativeTime(updatedAt)}` : ''}`}
+        extra={
+          <button className="btn-primary btn-sm" onClick={() => void save()} disabled={saving}>
+            {saving ? '保存中…' : '保存并生效'}
+          </button>
+        }
+      />
+      <p className="text-xs text-faint mb-3 leading-relaxed">
+        这里配置的源由站点统一管理（存于 Cloudflare D1）：保存后所有登录访客自动可用，访客本地的勾选状态不受影响。
+        保存即整体覆盖，删除的源会在访客端同步移除。
+      </p>
+
+      {/* 点播源 */}
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-medium text-content">采集站（点播）{sources.length > 0 && ` · ${sources.length} 个`}</h3>
+        <button className="btn-ghost btn-sm" onClick={() => setVodEdit(-1)}>
+          <Icon name="plus" className="w-3.5 h-3.5" />
+          添加
+        </button>
+      </div>
+      <SourceForm
+        visible={vodEdit !== null}
+        initial={vodEdit !== null && vodEdit >= 0 ? { key: '', ...sources[vodEdit] } : undefined}
+        onCancel={() => setVodEdit(null)}
+        onSubmit={(data) => {
+          setSources((prev) => {
+            if (vodEdit === null) return prev;
+            if (vodEdit < 0) return [...prev, data];
+            return prev.map((s, i) => (i === vodEdit ? data : s));
+          });
+          setVodEdit(null);
+        }}
+      />
+      {sources.length === 0 && vodEdit === null ? (
+        <p className="text-xs text-faint mb-4">还没有共享点播源。</p>
+      ) : (
+        <ul className="space-y-2 mb-4">
+          {sources.map((s, i) => (
+            <li key={`${s.url}|${s.name}`} className="bg-card rounded-lg p-3 flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-content truncate">
+                  {s.name}
+                  {s.isAdult && <span className="text-pink-400 text-xs ml-1">(18+)</span>}
+                </div>
+                <div className="text-xs text-faint truncate">{s.url}</div>
+              </div>
+              <button
+                className="rounded-md p-2 text-muted transition-colors hover:bg-hover hover:text-accent shrink-0"
+                onClick={() => setVodEdit(i)}
+                aria-label="编辑"
+                title="编辑"
+              >
+                <Icon name="edit" className="w-4 h-4" />
+              </button>
+              <button
+                className="rounded-md p-2 text-muted transition-colors hover:bg-hover hover:text-danger shrink-0"
+                onClick={() => setSources((prev) => prev.filter((_, idx) => idx !== i))}
+                aria-label="删除"
+                title="删除（保存后生效）"
+              >
+                <Icon name="trash" className="w-4 h-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* 直播源 */}
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-medium text-content">直播源{liveSources.length > 0 && ` · ${liveSources.length} 个`}</h3>
+        <button className="btn-ghost btn-sm" onClick={() => setLiveEdit(-1)}>
+          <Icon name="plus" className="w-3.5 h-3.5" />
+          添加
+        </button>
+      </div>
+      <LiveSourceForm
+        visible={liveEdit !== null}
+        initial={liveEdit !== null && liveEdit >= 0 ? liveSources[liveEdit] : undefined}
+        onCancel={() => setLiveEdit(null)}
+        onSubmit={(data) => {
+          const entry: DraftLive = { url: data.url, name: data.name, epg: data.epg };
+          setLiveSources((prev) => {
+            if (liveEdit === null) return prev;
+            if (liveEdit < 0) return [...prev, entry];
+            return prev.map((s, i) => (i === liveEdit ? entry : s));
+          });
+          setLiveEdit(null);
+        }}
+      />
+      {liveSources.length === 0 && liveEdit === null ? (
+        <p className="text-xs text-faint">还没有共享直播源。</p>
+      ) : (
+        <ul className="space-y-2">
+          {liveSources.map((s, i) => (
+            <li key={`${s.url}|${s.name ?? ''}`} className="bg-card rounded-lg p-3 flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-content truncate">{s.name || hostnameOf(s.url)}</div>
+                <div className="text-xs text-faint truncate">
+                  {s.url}
+                  {s.epg && ' · 已配置节目单'}
+                </div>
+              </div>
+              <button
+                className="rounded-md p-2 text-muted transition-colors hover:bg-hover hover:text-accent shrink-0"
+                onClick={() => setLiveEdit(i)}
+                aria-label="编辑"
+                title="编辑名称与节目单地址"
+              >
+                <Icon name="edit" className="w-4 h-4" />
+              </button>
+              <button
+                className="rounded-md p-2 text-muted transition-colors hover:bg-hover hover:text-danger shrink-0"
+                onClick={() => setLiveSources((prev) => prev.filter((_, idx) => idx !== i))}
+                aria-label="删除"
+                title="删除（保存后生效）"
+              >
+                <Icon name="trash" className="w-4 h-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

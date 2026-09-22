@@ -7,7 +7,7 @@ import { AuthProvider } from './auth';
 import { ThemeProvider } from './theme';
 import { useAppStore, hydrateLiveProbeResults } from '@/lib/store';
 import { api, STATUS_QUERY_KEY } from '@/lib/client-api';
-import { applyEnvPresets } from '@/lib/subscription-sync';
+import { applyEnvPresets, syncSharedSources } from '@/lib/subscription-sync';
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -37,7 +37,10 @@ export function Providers({ children }: { children: ReactNode }) {
         // 预置数据（DEFAULT_SOURCES / DEFAULT_LIVE_SOURCES / DEFAULT_SUBSCRIPTIONS）
         // 预置订阅要经鉴权接口拉取，首屏这次可能发生在登录之前而 401 静默失败；
         // 登录成功后由 AuthProvider 再调一次 applyEnvPresets 补齐（函数幂等）
-        if (d) return applyEnvPresets(d);
+        const applied = d ? applyEnvPresets(d) : undefined;
+        // 站点共享源需要鉴权，仅在会话有效时拉取（未登录时由登录成功路径补拉）
+        if (d?.verified) void syncSharedSources();
+        return applied;
       })
       .catch(() => {});
   }, [queryClient]);

@@ -74,6 +74,11 @@ docker compose pull && docker compose up -d
 ```bash
 npm install
 
+# 可选：启用站点共享源（管理员编辑、所有登录访客可用）
+npx wrangler d1 create libretv             # 创建 D1 数据库，记录返回的 database_id
+# 将 database_id 回填到 wrangler.jsonc 的 d1_databases[].database_id 字段
+# 数据表由应用首次写入时自动创建，无需手动建表
+
 # 本地预览（miniflare，无需登录 Cloudflare）
 npx wrangler secret put PASSWORD --local   # 本地写入 .wrangler 状态
 npm run preview
@@ -85,6 +90,15 @@ npm run deploy                             # 输出 https://libretv.<你的子�
 ```
 
 环境变量均通过机密/变量配置（`PASSWORD` 必填；`PROXY_SECRET`、`DEFAULT_SOURCES` 等可选），不在 `.env` 中配置。
+
+#### 站点共享源（D1）
+
+D1 数据库用于存储站点级共享源配置：管理员登录后在「设置 → 源管理 → 站点共享源」编辑点播源与直播源，所有登录访客下次访问时自动拉取并应用。
+
+- **首次部署前**执行 `npx wrangler d1 create libretv`，将返回的 `database_id` 回填到 [wrangler.jsonc](wrangler.jsonc) 的 `d1_databases[].database_id` 字段（占位符为 `00000000-0000-0000-0000-000000000000`）。
+- **数据表自动创建**：应用首次写入时自动建表（`shared_config`，单行 KV 模式），无需手动执行迁移。
+- **未配置 D1 的影响**：保留占位符 `database_id` 不影响构建与部署，仅站点共享源功能不可用（GET `/api/shared/sources` 返回 `available:false`，面板显示「当前部署不支持站点共享源」），预置源仍走 `DEFAULT_SOURCES` / `DEFAULT_LIVE_SOURCES` 环境变量。
+- **Docker / Node 部署**：无 D1 绑定，该功能自动降级为不可用，与 Workers 未配置 D1 的行为一致。
 
 > ⚠️ **免费版限制**：每日 10 万次请求（HLS 分片经代理播放时每分片计一次）；单请求 CPU 10ms（正常观看足够）；单请求子请求上限 50 个（建议部署变量 `SEARCH_MAX_PAGES=2`）；内存级限流/缓存仅单实例生效。高播放量站点建议选用图片直连模式以节省请求配额。
 

@@ -30,6 +30,8 @@ interface LiveRow {
   label: string;
   epgUrl?: string;
   preset: boolean;
+  /** 站点共享源（管理员存于 D1）：展示徽章，本地不可编辑删除 */
+  shared?: boolean;
   lastSync?: number;
   fromSubscriptions: string[];
 }
@@ -52,6 +54,14 @@ export function LiveSourceManager() {
       preset: true,
       fromSubscriptions: [],
     }));
+    const shared: LiveRow[] = store.sharedLiveSources.map((s) => ({
+      url: s.url,
+      label: s.name || hostnameOf(s.url),
+      epgUrl: s.epg,
+      preset: false,
+      shared: true,
+      fromSubscriptions: [],
+    }));
     const subs: LiveRow[] = store.liveSubscriptions.map((s) => ({
       url: s.url,
       label: s.name || hostnameOf(s.url),
@@ -60,17 +70,17 @@ export function LiveSourceManager() {
       lastSync: s.lastSync,
       fromSubscriptions: s.fromSubscriptions,
     }));
-    const all = [...preset, ...subs];
+    const all = [...preset, ...shared, ...subs];
     const q = query.trim().toLowerCase();
     return all.filter((r) => {
       if (filter === 'enabled' && !store.liveSelectedUrls.includes(r.url)) return false;
       if (filter === 'disabled' && store.liveSelectedUrls.includes(r.url)) return false;
       if (filter === 'sub' && r.fromSubscriptions.length === 0) return false;
-      if (filter === 'manual' && !(r.fromSubscriptions.length === 0 && !r.preset)) return false;
+      if (filter === 'manual' && !(r.fromSubscriptions.length === 0 && !r.preset && !r.shared)) return false;
       if (!q) return true;
       return r.label.toLowerCase().includes(q) || r.url.toLowerCase().includes(q);
     });
-  }, [store.liveEnvSources, store.liveSubscriptions, store.liveSelectedUrls, query, filter]);
+  }, [store.liveEnvSources, store.sharedLiveSources, store.liveSubscriptions, store.liveSelectedUrls, query, filter]);
 
   // 编辑中的手动源（与「添加」共用同一表单）
   const editingSource = editing ? store.liveSubscriptions.find((s) => s.url === editing) : undefined;
@@ -105,13 +115,20 @@ export function LiveSourceManager() {
     });
   };
 
-  const empty = store.liveEnvSources.length === 0 && store.liveSubscriptions.length === 0;
+  const empty =
+    store.liveEnvSources.length === 0 &&
+    store.sharedLiveSources.length === 0 &&
+    store.liveSubscriptions.length === 0;
 
   return (
     <section>
       <SectionTitle
         title="直播源"
-        hint={empty ? 'M3U 订阅 · /live 页面播放' : `共 ${store.liveEnvSources.length + store.liveSubscriptions.length} 个 · 已启用 ${store.liveSelectedUrls.length}`}
+        hint={
+          empty
+            ? 'M3U 订阅 · /live 页面播放'
+            : `共 ${store.liveEnvSources.length + store.sharedLiveSources.length + store.liveSubscriptions.length} 个 · 已启用 ${store.liveSelectedUrls.length}`
+        }
         extra={
           <button className="btn-primary btn-sm" onClick={() => setAdding(true)}>
             <Icon name="plus" className="w-3.5 h-3.5" />
@@ -210,6 +227,14 @@ export function LiveSourceManager() {
                               部署者预置
                             </span>
                           )}
+                          {row.shared && (
+                            <span
+                              className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-chip text-faint align-middle"
+                              title="站点共享源：由站点管理员配置，所有登录访客可用"
+                            >
+                              站点共享
+                            </span>
+                          )}
                           {fromSubscription && (
                             <span
                               className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent align-middle"
@@ -239,7 +264,7 @@ export function LiveSourceManager() {
                       >
                         <Icon name="download" className="w-4 h-4" />
                       </button>
-                      {row.preset ? null : fromSubscription ? (
+                      {row.preset || row.shared ? null : fromSubscription ? (
                         <>
                           {/* 订阅源由远端列表管理：编辑会被下次同步覆盖、删除会复活，故置为禁用态并指路 */}
                           <button
@@ -292,7 +317,7 @@ export function LiveSourceManager() {
 }
 
 /** 直播源表单：与点播源一致，由「+ 添加 / 编辑」按钮展开；编辑时地址只读、提交后自动探活（仅新增） */
-function LiveSourceForm({
+export function LiveSourceForm({
   visible,
   initial,
   onCancel,

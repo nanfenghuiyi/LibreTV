@@ -140,9 +140,10 @@ function HistoryItem({ item }: { item: HistoryEntry }) {
   const customImageProxy = useAppStore((s) => s.customImageProxy);
   const customAPIs = useAppStore((s) => s.customAPIs);
   const envSources = useAppStore((s) => s.envSources);
+  const sharedSources = useAppStore((s) => s.sharedSources);
   const { toast } = useToast();
   const [imgFailed, setImgFailed] = useState(false);
-  const source = resolveSource({ customAPIs, envSources }, item.sourceKey);
+  const source = resolveSource({ customAPIs, envSources, sharedSources }, item.sourceKey);
   const pic = buildImageUrl(item.pic, imageProxyMode, customImageProxy);
 
   const hasPercent =

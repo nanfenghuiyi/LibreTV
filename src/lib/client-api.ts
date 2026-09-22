@@ -1,6 +1,6 @@
 'use client';
 
-import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, AuthStatusResponse, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload } from './types';
+import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, AuthStatusResponse, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload, SharedSourcesPayload } from './types';
 
 /**
  * 客户端 API 封装。401 时触发全局事件打开登录框，
@@ -159,6 +159,23 @@ export const api = {
   }) =>
     request<{ url: string; provider: string; sources: number; liveSources: number }>('/api/publish', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+
+  /** —— 站点共享源（Cloudflare D1 部署可用；未配置 D1 时 available=false） —— */
+
+  /** 读取站点共享源配置 */
+  getSharedSources: () =>
+    request<{ available: boolean; config: SharedSourcesPayload | null }>('/api/shared/sources'),
+
+  /** 覆盖保存站点共享源配置（需要登录，实际凭 PASSWORD 鉴权） */
+  saveSharedSources: (payload: {
+    sources: { name: string; url: string; detail?: string; isAdult?: boolean }[];
+    liveSources: { name?: string; url: string; epg?: string }[];
+  }) =>
+    request<{ available: boolean; config: SharedSourcesPayload }>('/api/shared/sources', {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }),

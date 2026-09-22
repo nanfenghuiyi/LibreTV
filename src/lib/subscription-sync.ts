@@ -117,3 +117,23 @@ export async function applyEnvPresets(status: AuthStatusResponse): Promise<void>
     await syncEnvSubscriptions(status.defaultSubscriptions);
   }
 }
+
+/**
+ * 拉取站点共享源（管理员存于 Cloudflare D1）并合入本地 store。
+ *
+ * 仅在已登录后调用：接口需要鉴权，未登录调用会 401 触发全局登录框。
+ * 未配置 D1 的部署（available=false）与请求失败均静默忽略——共享源是可选增强，
+ * 失败不影响本地源的使用；下次登录成功时会再次尝试。
+ *
+ * 重复调用是安全的：setSharedSources 幂等，seen 标记（sharedKeysSeen）保证
+ * 用户取消勾选的共享源不会被反复勾回。
+ */
+export async function syncSharedSources(): Promise<void> {
+  try {
+    const { available, config } = await api.getSharedSources();
+    if (!available || !config) return;
+    useAppStore.getState().setSharedSources(config.sources, config.liveSources);
+  } catch {
+    // 静默：共享源是可选增强，失败不影响本地源的使用
+  }
+}

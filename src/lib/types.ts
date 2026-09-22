@@ -197,3 +197,11 @@ export interface SourceListPayload {
   /** 解析统计（格式、跳过与截断），老数据可能缺失 */
   stats?: SubscriptionParseStats;
 }
+
+/** 站点级共享源配置（管理员存入 D1，登录访客均可读取） */
+export interface SharedSourcesPayload {
+  sources: SourceConfig[];
+  liveSources: LiveSourceConfig[];
+  /** 最近一次保存的时间戳（epoch ms） */
+  updatedAt?: number;
+}
