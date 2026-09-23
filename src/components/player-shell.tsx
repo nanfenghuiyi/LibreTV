@@ -35,6 +35,40 @@ class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
   }
 }
 
+// 复制到剪贴板：http 非安全上下文（局域网 IP 访问）下 navigator.clipboard 不可用，降级 execCommand
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  }
+}
+
+// 播放器控件图标（heroicons arrow-down-tray，描边风格，currentColor 随主题）
+const COPY_LINK_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="22" height="22"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>';
+
+// 强制走服务器代理：手机等环境直连 CDN 不稳定时由 NEXT_PUBLIC_FORCE_PROXY=1 开启
+const FORCE_PROXY = process.env.NEXT_PUBLIC_FORCE_PROXY === '1';
+
+// 代理偏好：用户在播放器设置里的选择（localStorage）优先，其次部署级默认环境变量
+function proxyPreferred(): boolean {
+  try {
+    const saved = localStorage.getItem('forceProxy');
+    if (saved !== null) return saved === '1';
+  } catch { /* 隐私模式等 localStorage 不可用时退回部署默认 */ }
+  return FORCE_PROXY;
+}
+
 interface PlayerShellProps {
   url: string;
   title: string;
@@ -101,10 +135,15 @@ export function PlayerShell({
       maxMaxBufferLength: 60,
       maxBufferSize: 30 * 1000 * 1000,
       maxBufferHole: 0.5,
-      fragLoadingMaxRetry: 6,
+      // 直连快速失败：manifest 8s 单次超时即报错，让代理回退尽快触发，避免长时间转圈
+      manifestLoadingTimeOut: 8000,
+      manifestLoadingMaxRetry: 0,
+      manifestLoadingRetryDelay: 500,
+      levelLoadingTimeOut: 8000,
+      levelLoadingMaxRetry: 0,
+      fragLoadingTimeOut: 15000,
+      fragLoadingMaxRetry: 2,
       fragLoadingRetryDelay: 1000,
-      manifestLoadingMaxRetry: 3,
-      manifestLoadingRetryDelay: 1000,
       startLevel: -1,
       abrEwmaDefaultEstimate: 500_000,
       appendErrorMaxRetry: 5,
@@ -114,8 +153,14 @@ export function PlayerShell({
     /**
      * 初始化 HLS。allowProxyFallback：直连致命网络错误（CORS/防盗链/分片被拒）时，
      * 自动改走同源 cookie 鉴权的 /api/proxy 重试一次。
+     * resumeAt：切代理/直连重建加载时恢复的播放位置（秒），0 表示从头开始。
      */
-    const setupHls = (video: HTMLVideoElement, mediaUrl: string, allowProxyFallback: boolean) => {
+    const setupHls = (
+      video: HTMLVideoElement,
+      mediaUrl: string,
+      allowProxyFallback: boolean,
+      resumeAt = 0,
+    ) => {
       hlsRef.current?.destroy();
       const hls = new Hls(hlsConfig);
       hlsRef.current = hls;
@@ -124,6 +169,7 @@ export function PlayerShell({
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (resumeAt > 1) video.currentTime = resumeAt;
         video.play().catch(() => {});
       });
       hls.on(Hls.Events.ERROR, (_evt, data) => {
@@ -177,13 +223,55 @@ export function PlayerShell({
       theme: '#2563eb',
       lang: navigator.language.toLowerCase().startsWith('zh') ? 'zh-cn' : 'en',
       moreVideoAttr: { crossOrigin: 'anonymous', playsInline: true },
+      controls: [
+        {
+          name: 'copy-link',
+          index: 20,
+          position: 'right',
+          html: COPY_LINK_ICON,
+          tooltip: '复制视频链接',
+          click: () => {
+            copyToClipboard(url).then((ok) =>
+              showHint(ok ? '视频链接已复制，可用下载工具直接下载' : '复制失败，请手动复制地址栏链接'),
+            );
+          },
+        },
+      ],
       customType: {
         m3u8: (video: HTMLVideoElement, mediaUrl: string) => {
-          setupHls(video, mediaUrl, true);
+          if (proxyPreferred()) {
+            setupHls(video, `/api/proxy/${encodeURIComponent(mediaUrl)}`, false);
+          } else {
+            setupHls(video, mediaUrl, true);
+          }
         },
       },
     });
     artRef.current = art;
+    // 设置项用运行时 API 添加（构造参数的 setting 仅接受 boolean）
+    art.setting.add({
+      html: '服务器代理',
+      tooltip: '直连失败时更稳定',
+      switch: proxyPreferred(),
+      onSwitch: () => {
+        const next = !proxyPreferred();
+        try {
+          localStorage.setItem('forceProxy', next ? '1' : '0');
+        } catch { /* 隐私模式等 localStorage 不可用时仅本次生效 */ }
+        const video = art.video as HTMLVideoElement | undefined;
+        if (video) {
+          // 从当前进度无缝重建：直连失败时切换此开关可立即恢复播放
+          setupHls(
+            video,
+            next ? `/api/proxy/${encodeURIComponent(url)}` : url,
+            false,
+            video.currentTime,
+          );
+        }
+        // 返回值会被 ArtPlayer 赋给 item.switch，控制开关 UI 翻转
+        return next;
+      },
+    });
     art.on('video:loadedmetadata', () => {
       // ArtPlayer 运行时支持 title 选项（类型定义未覆盖），用于界面标题展示
       try {
