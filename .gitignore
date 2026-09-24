@@ -3,6 +3,7 @@ node_modules/
 out/
 .open-next/
 .wrangler/
+.wrangler-home/
 .env
 .env*.local
 *.tsbuildinfo
