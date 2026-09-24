@@ -5,6 +5,9 @@ import Artplayer from 'artplayer';
 import Hls, { type HlsConfig } from 'hls.js';
 import { filterAdsFromM3u8 } from '@/lib/m3u8';
 import { formatTime } from '@/lib/utils';
+import { useToast } from './toast';
+import { useFocusTrap } from './use-focus-trap';
+import { Icon } from './icon';
 
 /**
  * 播放器外壳：ArtPlayer + hls.js（旧版 player.js 的 React 化）。
@@ -97,6 +100,9 @@ export function PlayerShell({
   const hlsRef = useRef<Hls | null>(null);
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
+  // 视频链接弹窗：点击工具栏按钮后展示（iframe 内嵌预览 + 复制入口）
+  const [urlModalOpen, setUrlModalOpen] = useState(false);
+  const urlModalPanelRef = useRef<HTMLDivElement>(null);
   // 起播前的品牌占位图（沿用旧版 nomedia 素材），实际开始播放后隐藏
   const [showPoster, setShowPoster] = useState(true);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -105,6 +111,35 @@ export function PlayerShell({
   cbs.current = { onTimeUpdate, onEnded, onPause, getRestorePosition };
   const autoplayRef = useRef(autoplayNext);
   autoplayRef.current = autoplayNext;
+  // 弹窗打开期间屏蔽播放器快捷键，避免空格/方向键穿透作用到底层播放器
+  const urlModalOpenRef = useRef(false);
+  urlModalOpenRef.current = urlModalOpen;
+  const { toast } = useToast();
+
+  // 弹窗打开期间：锁定背景滚动 + Esc 关闭（焦点圈闭由 useFocusTrap 负责）
+  useEffect(() => {
+    if (!urlModalOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setUrlModalOpen(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', handler);
+    };
+  }, [urlModalOpen]);
+  useFocusTrap(urlModalOpen, urlModalPanelRef);
+
+  const handleCopyUrl = () => {
+    copyToClipboard(url).then((ok) =>
+      toast(
+        ok ? '视频链接已复制，可用下载工具直接下载' : '复制失败，请手动复制地址栏链接',
+        ok ? 'success' : 'error',
+      ),
+    );
+  };
 
   useEffect(() => {
     if (!containerRef.current || !url) return;
@@ -229,11 +264,12 @@ export function PlayerShell({
           index: 20,
           position: 'right',
           html: COPY_LINK_ICON,
-          tooltip: '复制视频链接',
+          tooltip: '查看视频链接',
           click: () => {
-            copyToClipboard(url).then((ok) =>
-              showHint(ok ? '视频链接已复制，可用下载工具直接下载' : '复制失败，请手动复制地址栏链接'),
-            );
+            // 原生全屏只渲染播放器容器，弹窗会被遮挡，先退出全屏再打开
+            art.fullscreen = false;
+            art.fullscreenWeb = false;
+            setUrlModalOpen(true);
           },
         },
       ],
@@ -321,6 +357,8 @@ export function PlayerShell({
       const target = e.target as HTMLElement;
       // 输入框或按钮获得焦点时不劫持按键：否则空格会吞掉按钮的默认激活
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.closest('button')) return;
+      // 链接弹窗打开时不劫持按键：空格/方向键/全屏快捷键不应作用到底层播放器
+      if (urlModalOpenRef.current) return;
       const current = artRef.current;
       if (!current) return;
       if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); return; } // 由父层处理集数切换
@@ -445,6 +483,49 @@ export function PlayerShell({
       {autoplayNext && !error && (
         <div className="absolute bottom-16 right-3 text-[10px] text-muted bg-black/50 px-2 py-0.5 rounded pointer-events-none">
           自动连播已开启
+        </div>
+      )}
+      {urlModalOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 animate-fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setUrlModalOpen(false);
+          }}
+        >
+          <div
+            ref={urlModalPanelRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-label="视频链接"
+            className="bg-surface-raised rounded-xl w-full max-w-2xl shadow-2xl animate-slide-up outline-none flex flex-col overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-line shrink-0">
+              <h2 className="text-base font-semibold text-content">视频链接</h2>
+              <button
+                className="p-1.5 rounded-md text-muted hover:text-content hover:bg-hover"
+                onClick={() => setUrlModalOpen(false)}
+                aria-label="关闭"
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+            <iframe src={url} title="视频链接预览" className="w-full h-[60vh] bg-white" />
+            <div className="px-5 py-3 border-t border-line space-y-1.5 shrink-0">
+              <div className="flex items-center gap-2">
+                <p className="flex-1 min-w-0 text-xs text-faint truncate select-text" title={url}>
+                  {url}
+                </p>
+                <button
+                  className="btn text-sm text-white bg-accent hover:bg-accent-hover shrink-0"
+                  onClick={handleCopyUrl}
+                >
+                  复制链接
+                </button>
+              </div>
+              <p className="text-xs text-faint">若上方空白，说明源站禁止内嵌展示，可复制链接交给下载工具直接下载</p>
+            </div>
+          </div>
         </div>
       )}
     </div>
