@@ -194,12 +194,12 @@ function WatchContent() {
           <BackButton />
           <div className="min-w-0">
             <h1 className="text-sm font-medium text-content truncate">{videoTitle}</h1>
-            <p className="text-xs text-faint">
+            <p className="text-xs text-faint truncate">
               {source.name}
               {episodes.length > 0 && ` · 第 ${currentIndex + 1}/${episodes.length} 集`}
             </p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <button className="btn-ghost btn-sm" onClick={() => setSwitchOpen(true)}>
               切换资源
             </button>
@@ -346,7 +346,7 @@ function BackButton() {
   const router = useRouter();
   return (
     <button
-      className="p-2 -ml-2 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"
+      className="shrink-0 p-2 -ml-2 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"
       onClick={() => {
         if (window.history.length > 1) router.back();
         else router.push('/');
