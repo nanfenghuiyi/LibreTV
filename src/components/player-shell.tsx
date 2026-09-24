@@ -498,9 +498,10 @@ export function PlayerShell({
           自动连播已开启
         </div>
       )}
+      {/* 层级 75：盖过 ArtPlayer 内部加载层（z-index 70），低于 ConfirmDialog(80)/Auth(95)/Toast(100) */}
       {urlModalOpen && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 animate-fade-in"
+          className="fixed inset-0 z-[75] flex items-center justify-center bg-black/80 p-4 animate-fade-in"
           onClick={(e) => {
             if (e.target === e.currentTarget) setUrlModalOpen(false);
           }}
