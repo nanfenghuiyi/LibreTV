@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Artplayer from 'artplayer';
 import Hls, { type HlsConfig } from 'hls.js';
 import { filterAdsFromM3u8 } from '@/lib/m3u8';
-import { formatTime } from '@/lib/utils';
+import { formatTime, sanitizeFilename } from '@/lib/utils';
 import { useToast } from './toast';
 import { useFocusTrap } from './use-focus-trap';
 import { Icon } from './icon';
@@ -62,6 +62,16 @@ const COPY_LINK_ICON =
 
 // 强制走服务器代理：手机等环境直连 CDN 不稳定时由 NEXT_PUBLIC_FORCE_PROXY=1 开启
 const FORCE_PROXY = process.env.NEXT_PUBLIC_FORCE_PROXY === '1';
+
+// 从媒体地址提取扩展名（小写，无法识别时按 mp4），用于下载文件命名
+function mediaExtensionOf(url: string): string {
+  try {
+    const m = new URL(url).pathname.match(/\.([a-z0-9]{1,5})$/i);
+    return m ? m[1].toLowerCase() : 'mp4';
+  } catch {
+    return 'mp4';
+  }
+}
 
 // 代理偏好：用户在播放器设置里的选择（localStorage）优先，其次部署级默认环境变量
 function proxyPreferred(): boolean {
@@ -140,6 +150,9 @@ export function PlayerShell({
       ),
     );
   };
+
+  // 下载文件名：当前播放标题 + 源地址扩展名，经代理 Content-Disposition 命名
+  const downloadName = sanitizeFilename(`${title}.${mediaExtensionOf(url)}`);
 
   useEffect(() => {
     if (!containerRef.current || !url) return;
@@ -516,14 +529,20 @@ export function PlayerShell({
                 <p className="flex-1 min-w-0 text-xs text-faint truncate select-text" title={url}>
                   {url}
                 </p>
-                <button
-                  className="btn text-sm text-white bg-accent hover:bg-accent-hover shrink-0"
-                  onClick={handleCopyUrl}
-                >
+                <button className="btn-ghost text-sm shrink-0" onClick={handleCopyUrl}>
                   复制链接
                 </button>
+                <a
+                  className="btn text-sm text-white bg-accent hover:bg-accent-hover shrink-0"
+                  href={`/api/proxy/${encodeURIComponent(url)}?download=${encodeURIComponent(downloadName)}`}
+                  download={downloadName}
+                >
+                  下载
+                </a>
               </div>
-              <p className="text-xs text-faint">若上方空白，说明源站禁止内嵌展示，可复制链接交给下载工具直接下载</p>
+              <p className="text-xs text-faint">
+                下载以「{title}」命名；若上方空白说明源站禁止内嵌，可复制链接交给下载工具
+              </p>
             </div>
           </div>
         </div>

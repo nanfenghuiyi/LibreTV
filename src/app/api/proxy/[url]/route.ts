@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { guardRequest } from '@/lib/api-guard';
 import { checkUpstreamAllowed, isBlockedByDNS, isValidProxyUrl } from '@/lib/ssrf';
 import { rewriteM3u8 } from '@/lib/m3u8';
+import { sanitizeFilename } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -79,6 +80,20 @@ function looksLikeImageUrl(target: string): boolean {
 }
 
 /**
+ * 下载模式的响应头：携带 ?download= 文件名时以附件形式返回，
+ * 让浏览器/下载工具用「标题.扩展名」命名（跨域直链无法用 download 属性重命名）。
+ * filename 提供纯 ASCII 回退，中文等非 ASCII 文件名走 RFC 5987 的 filename*。
+ */
+function buildContentDisposition(download: string | null): Record<string, string> {
+  if (!download) return {};
+  const name = sanitizeFilename(download);
+  const ascii = name.replace(/[^\x20-\x7E]/g, '').trim() || 'video';
+  return {
+    'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+  };
+}
+
+/**
  * 通用流式代理：
  * - 已登录会话（httpOnly cookie）→ m3u8 重写后的分片同源请求自动携带，不再有旧版丢鉴权参数的问题；
  * - 未登录仅放行图片目标（豆瓣封面等），且同样受 SSRF 防护约束；
@@ -136,15 +151,23 @@ export async function GET(req: Request, ctx: { params: Promise<{ url: string }> 
     contentType.includes('mpegurl') || contentType.includes('x-mpegurl') ||
     targetUrl.toLowerCase().endsWith('.m3u8');
 
-  // m3u8 文本：重写为代理路径（以重定向后的最终 URL 为 base 解析相对地址）
+  // ?download=文件名：附件下载模式（由播放器链接弹窗的「下载」按钮使用）
+  const disposition = buildContentDisposition(
+    new URL(req.url).searchParams.get('download')
+  );
+
+  // m3u8 文本：播放场景重写为代理路径（以重定向后的最终 URL 为 base 解析相对地址）；
+  // 下载模式返回原始清单——重写后的分片地址绑定本站会话，离站不可用
   if (isM3u8) {
     const text = await response.text();
-    return new NextResponse(rewriteM3u8(text, finalUrl), {
+    const body = disposition['Content-Disposition'] ? text : rewriteM3u8(text, finalUrl);
+    return new NextResponse(body, {
       status: response.status,
       headers: {
         'Content-Type': 'application/vnd.apple.mpegurl',
         'Cache-Control': 'no-store',
         'Access-Control-Allow-Origin': '*',
+        ...disposition,
       },
     });
   }
@@ -158,6 +181,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ url: string }> 
   // fetch 会自动解压，转发时必须去掉长度相关头避免浏览器二次解压
   outHeaders.set('Cache-Control', 'public, max-age=3600');
   outHeaders.set('Access-Control-Allow-Origin', '*');
+  for (const [name, value] of Object.entries(disposition)) {
+    outHeaders.set(name, value);
+  }
 
   return new NextResponse(response.body, {
     status: response.status,

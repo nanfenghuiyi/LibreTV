@@ -1,3 +1,10 @@
+/** 站点名称与标题：layout metadata 与播放页 document.title 共用，避免硬编码重复 */
+export const SITE_NAME = 'LibreTV';
+export const SITE_DEFAULT_TITLE = `${SITE_NAME} - 免费在线视频搜索与观看平台`;
+export function pageTitleOf(title: string): string {
+  return `${title} - ${SITE_NAME}`;
+}
+
 export function cn(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
 }
@@ -92,4 +99,23 @@ export function buildWatchUrl(params: {
   if (params.sourceUrl) sp.set('sourceUrl', params.sourceUrl);
   if (params.detail) sp.set('detail', params.detail);
   return `/watch?${sp.toString()}`;
+}
+
+/** 下载文件名最大长度：超出的标题截断，避免超长文件名在各端表现异常 */
+const MAX_FILENAME_LENGTH = 80;
+
+/**
+ * 清洗为可安全落盘的文件名：剔除控制字符与路径分隔符（防头部注入/目录穿越），
+ * 去首尾空白与点号，超长截断；清洗后为空时回退到 fallback。
+ * 供代理下载的 Content-Disposition 与前端 download 属性共用。
+ */
+export function sanitizeFilename(name: string, fallback = 'video'): string {
+  const cleaned = name
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[.\s]+|[.\s]+$/g, '')
+    .slice(0, MAX_FILENAME_LENGTH)
+    .trim();
+  return cleaned || fallback;
 }

@@ -19,7 +19,7 @@ import {
   upsertHistory,
   db,
 } from '@/lib/db';
-import { cn } from '@/lib/utils';
+import { cn, pageTitleOf, SITE_DEFAULT_TITLE } from '@/lib/utils';
 
 /**
  * 播放页（唯一入口，替代旧版 watch.html → player.html 跳转链）。
@@ -64,6 +64,14 @@ function WatchContent() {
 
   const episodes = useMemo(() => detailQuery.data?.episodes ?? [], [detailQuery.data]);
   const videoTitle = titleParam || detailQuery.data?.videoInfo?.title || '未知视频';
+
+  // 同步浏览器标签页标题：App 端下载命名等场景读取 document.title
+  useEffect(() => {
+    document.title = pageTitleOf(videoTitle);
+    return () => {
+      document.title = SITE_DEFAULT_TITLE;
+    };
+  }, [videoTitle]);
 
   // 当前播放地址：优先取剧集列表中的当前集，其次直连 URL 参数
   const currentUrl = useMemo(() => {
