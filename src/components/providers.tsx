@@ -6,8 +6,9 @@ import { ToastProvider } from './toast';
 import { AuthProvider } from './auth';
 import { ThemeProvider } from './theme';
 import { useAppStore, hydrateLiveProbeResults } from '@/lib/store';
+import { startUserSync } from '@/lib/user-sync';
 import { api, STATUS_QUERY_KEY } from '@/lib/client-api';
-import { applyEnvPresets, syncSharedSources } from '@/lib/subscription-sync';
+import { bootstrapSources } from '@/lib/subscription-sync';
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -34,13 +35,11 @@ export function Providers({ children }: { children: ReactNode }) {
         return queryClient.fetchQuery({ queryKey: STATUS_QUERY_KEY, queryFn: () => api.status() });
       })
       .then((d) => {
-        // 预置数据（DEFAULT_SOURCES / DEFAULT_LIVE_SOURCES / DEFAULT_SUBSCRIPTIONS）
-        // 预置订阅要经鉴权接口拉取，首屏这次可能发生在登录之前而 401 静默失败；
-        // 登录成功后由 AuthProvider 再调一次 applyEnvPresets 补齐（函数幂等）
-        const applied = d ? applyEnvPresets(d) : undefined;
-        // 站点共享源需要鉴权，仅在会话有效时拉取（未登录时由登录成功路径补拉）
-        if (d?.verified) void syncSharedSources();
-        return applied;
+        // 源体系统一启动入口：未登录应用 env 预置；已登录先做分配/共享源决策
+        // （有分配时替换模式，不再下发 env/shared），见 bootstrapSources 注释
+        if (d) void bootstrapSources(d);
+        // 用户体系可用且会话有效：恢复个人数据云同步（登录后刷新页面的场景）
+        if (d?.verified && d.userSystemAvailable && d.me) startUserSync();
       })
       .catch(() => {});
   }, [queryClient]);

@@ -1,6 +1,6 @@
 'use client';
 
-import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, AuthStatusResponse, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload, SharedSourcesPayload } from './types';
+import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, AuthStatusResponse, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload, SharedSourcesPayload, AssignedSourcesPayload, SubscriptionEntry, CurrentUser, UserDataItem, AdminUserRow, AdminInviteRow } from './types';
 
 /**
  * 客户端 API 封装。401 时触发全局事件打开登录框，
@@ -38,6 +38,13 @@ export interface LiveProbeResult {
 /** /api/status 的 React Query key：Providers 与 AuthProvider 共用，避免同一页面重复请求 */
 export const STATUS_QUERY_KEY = ['app-status'] as const;
 
+/** PUT /api/user/data 的请求体：upsert 行、按 key 删除、按 type 清空（三选一可组合） */
+export interface UserDataPutPayload {
+  items?: UserDataItem[];
+  deletes?: { type: string; keys: string[] }[];
+  clears?: string[];
+}
+
 export function onUnauthorized(handler: (event: CustomEvent) => void): () => void {
   const wrapped = (e: Event) => handler(e as CustomEvent);
   window.addEventListener(UNAUTHORIZED_EVENT, wrapped);
@@ -74,14 +81,74 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export const api = {
   status: () => request<AuthStatusResponse>('/api/status'),
 
-  login: (password: string) =>
-    request<{ success: boolean }>('/api/auth', {
+  /** 登录：username 省略时走主密码（admin）路径 */
+  login: (password: string, username?: string) =>
+    request<{ success: boolean; user?: CurrentUser }>('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify(username ? { username, password } : { password }),
     }),
 
   logout: () => request<{ success: boolean }>('/api/auth', { method: 'DELETE' }),
+
+  /** 注册（USER_REGISTRATION 控制 invite/open/off），成功即自动登录 */
+  register: (payload: { username: string; password: string; inviteCode?: string }) =>
+    request<{ success: boolean; user: CurrentUser }>('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+
+  /** 修改个人密码（admin 走 PASSWORD 环境变量，服务端会拒绝） */
+  changePassword: (oldPassword: string, newPassword: string) =>
+    request<{ success: boolean }>('/api/user/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oldPassword, newPassword }),
+    }),
+
+  /** —— 个人数据云同步（未配置 D1 时 available=false） —— */
+
+  /** 全量拉取云端个人数据（历史/进度/搜索词/设置快照） */
+  getUserData: () => request<{ available: boolean; items: UserDataItem[] }>('/api/user/data'),
+
+  /** 批量推送本地变更：upsert / 按 key 删除 / 按 type 清空（服务端 LWW 合并） */
+  putUserData: (payload: UserDataPutPayload) =>
+    request<{ available: boolean; updated: number }>('/api/user/data', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+
+  /** —— 管理面板（仅 admin） —— */
+
+  adminListUsers: () => request<{ available: boolean; users: AdminUserRow[] }>('/api/admin/users'),
+
+  adminUpdateUser: (username: string, patch: { disabled?: boolean; bumpEpoch?: boolean }) =>
+    request<{ available: boolean; user: AdminUserRow }>('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, ...patch }),
+    }),
+
+  adminDeleteUser: (username: string) =>
+    request<{ available: boolean }>(`/api/admin/users?username=${encodeURIComponent(username)}`, {
+      method: 'DELETE',
+    }),
+
+  adminListInvites: () => request<{ available: boolean; invites: AdminInviteRow[] }>('/api/admin/invites'),
+
+  adminCreateInvite: (payload?: { maxUses?: number; expiresInDays?: number; note?: string }) =>
+    request<{ available: boolean; invite: AdminInviteRow }>('/api/admin/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload ?? {}),
+    }),
+
+  adminDeleteInvite: (code: string) =>
+    request<{ available: boolean }>(`/api/admin/invites?code=${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+    }),
 
   /**
    * 聚合搜索。传入 onSource 时走 /api/search?stream=1 的 NDJSON 流：
@@ -165,20 +232,51 @@ export const api = {
 
   /** —— 站点共享源（Cloudflare D1 部署可用；未配置 D1 时 available=false） —— */
 
-  /** 读取站点共享源配置 */
+  /** 读取站点共享源配置及本人的管理员分配源（assigned 非 null 时前端进入替换模式） */
   getSharedSources: () =>
-    request<{ available: boolean; config: SharedSourcesPayload | null }>('/api/shared/sources'),
+    request<{ available: boolean; config: SharedSourcesPayload | null; assigned: AssignedSourcesPayload | null }>('/api/shared/sources'),
 
-  /** 覆盖保存站点共享源配置（需要登录，实际凭 PASSWORD 鉴权） */
+  /** 覆盖保存站点共享源配置（需要登录，实际凭 PASSWORD 鉴权）；未传 subscriptions 保留原值 */
   saveSharedSources: (payload: {
-    sources: { name: string; url: string; detail?: string; isAdult?: boolean }[];
-    liveSources: { name?: string; url: string; epg?: string }[];
+    sources?: { name: string; url: string; detail?: string; isAdult?: boolean }[];
+    liveSources?: { name?: string; url: string; epg?: string }[];
+    subscriptions?: SubscriptionEntry[];
   }) =>
     request<{ available: boolean; config: SharedSourcesPayload }>('/api/shared/sources', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }),
+
+  /** —— 用户专属数据源分配（仅 admin） —— */
+
+  adminGetUserSources: (username: string) =>
+    request<{ available: boolean; assigned: AssignedSourcesPayload | null }>(
+      `/api/admin/user-sources?username=${encodeURIComponent(username)}`
+    ),
+
+  adminSaveUserSources: (
+    username: string,
+    payload: {
+      sources?: { name: string; url: string; detail?: string; isAdult?: boolean }[];
+      liveSources?: { name?: string; url: string; epg?: string }[];
+      subscriptions?: SubscriptionEntry[];
+    }
+  ) =>
+    request<{ available: boolean; assigned: AssignedSourcesPayload }>(
+      `/api/admin/user-sources?username=${encodeURIComponent(username)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  adminDeleteUserSources: (username: string) =>
+    request<{ available: boolean }>(
+      `/api/admin/user-sources?username=${encodeURIComponent(username)}`,
+      { method: 'DELETE' }
+    ),
 
   /** —— 直播 / IPTV —— */
 

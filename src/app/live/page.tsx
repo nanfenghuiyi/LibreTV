@@ -56,6 +56,7 @@ function LiveContent() {
   const liveSelectedUrls = useAppStore((s) => s.liveSelectedUrls);
   const liveEnvSources = useAppStore((s) => s.liveEnvSources);
   const sharedLiveSources = useAppStore((s) => s.sharedLiveSources);
+  const assignedLiveSources = useAppStore((s) => s.assignedLiveSources);
   const liveSubscriptions = useAppStore((s) => s.liveSubscriptions);
   const liveFavorites = useAppStore((s) => s.liveFavorites);
   const imageProxyMode = useAppStore((s) => s.imageProxyMode);
@@ -74,8 +75,10 @@ function LiveContent() {
   // 仅聚合已启用的直播源（设置 → 直播源中的勾选状态）
   const sources = useMemo(() => {
     const selected = new Set(liveSelectedUrls);
-    return allLiveSources({ liveEnvSources, sharedLiveSources, liveSubscriptions }).filter((s) => selected.has(s.url));
-  }, [liveSelectedUrls, liveEnvSources, sharedLiveSources, liveSubscriptions]);
+    return allLiveSources({ liveEnvSources, sharedLiveSources, assignedLiveSources, liveSubscriptions }).filter((s) =>
+      selected.has(s.url)
+    );
+  }, [liveSelectedUrls, liveEnvSources, sharedLiveSources, assignedLiveSources, liveSubscriptions]);
 
   // 聚合全部直播源的 M3U 解析结果（单源失败不影响整体）
   const playlistsQuery = useQuery({

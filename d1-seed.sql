@@ -11,3 +11,33 @@ CREATE TABLE IF NOT EXISTS shared_config (
 
 INSERT INTO shared_config (k, v, updated_at) VALUES ('sources', '{"sources":[{"name":"电影天堂","url":"http://caiji.dyttzyapi.com/api.php/provide/vod"},{"name":"暴风资源","url":"https://bfzyapi.com/api.php/provide/vod"},{"name":"非凡资源","url":"https://api.ffzyapi.com/api.php/provide/vod"},{"name":"量子资源","url":"https://cj.lziapi.com/api.php/provide/vod"},{"name":"无尽资源","url":"https://api.wujinapi.me/api.php/provide/vod"},{"name":"极速资源","url":"https://jszyapi.com/api.php/provide/vod"},{"name":"豆瓣资源","url":"https://dbzy.tv/api.php/provide/vod"},{"name":"天涯资源","url":"https://tyyszy.com/api.php/provide/vod"},{"name":"360资源","url":"https://360zy.com/api.php/provide/vod"},{"name":"茅台资源","url":"https://caiji.maotaizy.cc/api.php/provide/vod"},{"name":"魔都资源","url":"https://www.mdzyapi.com/api.php/provide/vod"},{"name":"最大资源","url":"https://api.zuidapi.com/api.php/provide/vod"},{"name":"樱花资源","url":"https://m3u8.apiyhzy.com/api.php/provide/vod"},{"name":"百度资源","url":"https://api.apibdzy.com/api.php/provide/vod"},{"name":"新浪资源","url":"https://api.xinlangapi.com/xinlangapi.php/provide/vod"},{"name":"豪华资源","url":"https://hhzyapi.com/api.php/provide/vod"},{"name":"速博资源","url":"https://subocaiji.com/api.php/provide/vod"},{"name":"光速资源","url":"https://api.guangsuapi.com/api.php/provide/vod"}],"liveSources":[{"name":"YanG聚合","url":"https://raw.githubusercontent.com/YanG-1989/m3u/main/Gather.m3u","epg":"https://live.fanmingming.com/e.xml"},{"name":"YueChan全球","url":"https://raw.githubusercontent.com/YueChan/Live/main/Global.m3u"},{"name":"每日更新IPv4","url":"https://raw.githubusercontent.com/vbskycn/iptv/master/tv/iptv4.m3u","epg":"http://epg.51zmt.top:8000/e.xml"},{"name":"mzky测活列表","url":"https://raw.githubusercontent.com/mzky/checklist/refs/heads/master/itvlist.m3u"}]}', 1790074000000)
 ON CONFLICT(k) DO UPDATE SET v = excluded.v, updated_at = excluded.updated_at;
+
+-- ─── 用户体系三张表（DDL 与 src/lib/user-auth.ts / user-data.ts 保持一致） ──
+
+CREATE TABLE IF NOT EXISTS users (
+  username TEXT PRIMARY KEY,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user',
+  epoch INTEGER NOT NULL DEFAULT 0,
+  disabled INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  last_login_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS invite_codes (
+  code TEXT PRIMARY KEY,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER,
+  used_count INTEGER NOT NULL DEFAULT 0,
+  max_uses INTEGER NOT NULL DEFAULT 1,
+  note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_data (
+  user_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  k TEXT NOT NULL,
+  v TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, type, k)
+);

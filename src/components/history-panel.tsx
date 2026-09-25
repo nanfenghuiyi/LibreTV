@@ -141,9 +141,10 @@ function HistoryItem({ item }: { item: HistoryEntry }) {
   const customAPIs = useAppStore((s) => s.customAPIs);
   const envSources = useAppStore((s) => s.envSources);
   const sharedSources = useAppStore((s) => s.sharedSources);
+  const assignedSources = useAppStore((s) => s.assignedSources);
   const { toast } = useToast();
   const [imgFailed, setImgFailed] = useState(false);
-  const source = resolveSource({ customAPIs, envSources, sharedSources }, item.sourceKey);
+  const source = resolveSource({ customAPIs, envSources, sharedSources, assignedSources }, item.sourceKey);
   const pic = buildImageUrl(item.pic, imageProxyMode, customImageProxy);
 
   const hasPercent =

@@ -180,6 +180,12 @@ interface AppState extends AppSettings {
   sharedLiveSources: LiveSourceConfig[];
   /** 已向用户展示过并自动勾选过的共享源 key（持久化：用户取消勾选后不再反复勾上） */
   sharedKeysSeen: string[];
+  /** 管理员为本用户分配的专属源（服务端下发，不持久化；非空时替换模式生效） */
+  assignedSources: SourceConfig[];
+  /** 管理员为本用户分配的专属直播源（同上） */
+  assignedLiveSources: LiveSourceConfig[];
+  /** 已向用户展示过并自动勾选过的分配源 key（持久化：用户取消勾选后不再反复勾上） */
+  assignedKeysSeen: string[];
   subscriptions: SourceSubscription[];
   /** —— 直播模块 —— */
   /** 部署者通过 DEFAULT_LIVE_SOURCES 预置的直播源（服务端下发，不持久化） */
@@ -200,6 +206,10 @@ interface AppState extends AppSettings {
   sourceHealth: Record<string, SourceHealthEntry>;
   /** 已出现过的 env 预置订阅 URL（持久化：用户删除后不再被自动加回） */
   envSubsSeen: string[];
+  /** 已出现过的站点共享订阅 URL（持久化：用户删除后不再被自动加回） */
+  siteSubsSeen: string[];
+  /** 已出现过的分配订阅 URL（持久化：用户删除后不再被自动加回） */
+  assignedSubsSeen: string[];
   addCustomApi: (api: Omit<SourceConfig, 'key'> & { key?: string }) => void;
   updateCustomApi: (key: string, patch: Partial<SourceConfig>) => void;
   /** 删除点播源；返回被删快照供撤销，key 不存在时返回 null */
@@ -210,6 +220,8 @@ interface AppState extends AppSettings {
   setSelectedKeys: (keys: string[]) => void;
   setEnvSources: (list: SourceConfig[]) => void;
   setSharedSources: (sources: SourceConfig[], liveSources: LiveSourceConfig[]) => void;
+  /** 应用管理员为本用户分配的专属源（语义同 setSharedSources：首次出现自动勾选） */
+  setAssignedSources: (sources: SourceConfig[], liveSources: LiveSourceConfig[]) => void;
   addSubscription: (url: string, name?: string) => void;
   removeSubscription: (url: string) => void;
   /** 整体启用/停用某个订阅（停用只影响搜索时是否采用，不动各源的勾选状态） */
@@ -251,17 +263,26 @@ interface AppState extends AppSettings {
   recordSourceHealth: (outcomes: SourceSearchOutcome[]) => SourceDisableEvent[];
   /** 清除单个源的健康度记录（手动恢复入口） */
   clearSourceHealth: (key: string) => void;
-  markEnvSubsSeen: (urls: string[]) => void;
+  /**
+   * 标记一批「托管订阅」的 URL 已出现过（持久化）。
+   * bucket 区分三套互不相干的 seen 集合：env=部署者预置 / site=站点共享 / assigned=管理员分配，
+   * 用户删除某条托管订阅后，同一 URL 不会再被自动加回。
+   */
+  markSubsSeen: (bucket: 'env' | 'site' | 'assigned', urls: string[]) => void;
   updateSettings: (patch: Partial<Omit<AppSettings, 'customAPIs' | 'selectedKeys'>>) => void;
 }
 
-/** 全部可用直播源（预置 + 站点共享 + 用户订阅）合并视图 */
+/** 全部可用直播源（预置 + 站点共享 + 管理员分配 + 用户订阅）合并视图 */
 export function allLiveSources(
-  state: Pick<AppState, 'liveEnvSources' | 'sharedLiveSources' | 'liveSubscriptions'>
+  state: Pick<
+    AppState,
+    'liveEnvSources' | 'sharedLiveSources' | 'assignedLiveSources' | 'liveSubscriptions'
+  >
 ): LiveSourceConfig[] {
   return [
     ...state.liveEnvSources,
     ...state.sharedLiveSources,
+    ...state.assignedLiveSources,
     ...state.liveSubscriptions.map((s) => ({ key: `sub_${s.url}`, name: s.name || s.url, url: s.url, epg: s.epg })),
   ];
 }
@@ -335,6 +356,9 @@ export const useAppStore = create<AppState>()(
       sharedSources: [],
       sharedLiveSources: [],
       sharedKeysSeen: [],
+      assignedSources: [],
+      assignedLiveSources: [],
+      assignedKeysSeen: [],
       subscriptions: [],
       liveEnvSources: [],
       liveEnvKeysSeen: [],
@@ -345,6 +369,8 @@ export const useAppStore = create<AppState>()(
       liveProbeResults: {},
       sourceHealth: {},
       envSubsSeen: [],
+      siteSubsSeen: [],
+      assignedSubsSeen: [],
       selectedKeys: [],
       yellowFilter: true,
       adFilter: true,
@@ -402,7 +428,9 @@ export const useAppStore = create<AppState>()(
           return;
         }
         // 成人内容过滤开启时不允许勾选成人源
-        const src = [...get().customAPIs, ...get().envSources, ...get().sharedSources].find((a) => a.key === key);
+        const src = [...get().customAPIs, ...get().envSources, ...get().sharedSources, ...get().assignedSources].find(
+          (a) => a.key === key
+        );
         if (src?.isAdult && get().yellowFilter) return;
         set({ selectedKeys: [...cur, key] });
       },
@@ -439,6 +467,25 @@ export const useAppStore = create<AppState>()(
           sharedSources: sources,
           sharedLiveSources: liveSources,
           sharedKeysSeen: [...get().sharedKeysSeen, ...freshKeys],
+          selectedKeys: [...get().selectedKeys, ...toSelect],
+          liveSelectedUrls: [...new Set([...get().liveSelectedUrls, ...freshUrls])],
+        });
+      },
+
+      setAssignedSources: (sources, liveSources) => {
+        // 与共享源一致：首次出现自动勾选；勾选状态记在 assignedKeysSeen，
+        // 管理员撤销分配后再恢复时，用户此前的勾选意图得以还原
+        const seen = new Set(get().assignedKeysSeen);
+        const freshKeys = sources.map((s) => s.key).filter((k) => !seen.has(k));
+        const toSelect = freshKeys.filter((k) => {
+          const src = sources.find((s) => s.key === k);
+          return !src?.isAdult || !get().yellowFilter;
+        });
+        const freshUrls = liveSources.filter((s) => !seen.has(s.key)).map((s) => s.url);
+        set({
+          assignedSources: sources,
+          assignedLiveSources: liveSources,
+          assignedKeysSeen: [...get().assignedKeysSeen, ...freshKeys],
           selectedKeys: [...get().selectedKeys, ...toSelect],
           liveSelectedUrls: [...new Set([...get().liveSelectedUrls, ...freshUrls])],
         });
@@ -756,17 +803,19 @@ export const useAppStore = create<AppState>()(
         set({ sourceHealth: next });
       },
 
-      markEnvSubsSeen: (urls) => {
-        const seen = new Set(get().envSubsSeen);
+      markSubsSeen: (bucket, urls) => {
+        const field =
+          bucket === 'env' ? 'envSubsSeen' : bucket === 'site' ? 'siteSubsSeen' : 'assignedSubsSeen';
+        const seen = new Set(get()[field]);
         for (const u of urls) seen.add(u);
-        set({ envSubsSeen: [...seen] });
+        set({ [field]: [...seen] } as Pick<AppState, 'envSubsSeen' | 'siteSubsSeen' | 'assignedSubsSeen'>);
       },
 
       updateSettings: (patch) => {
         // 打开成人内容过滤时，同步取消勾选所有成人源，避免两者并存
         if (patch.yellowFilter === true) {
           const adultKeys = new Set(
-            [...get().customAPIs, ...get().envSources, ...get().sharedSources]
+            [...get().customAPIs, ...get().envSources, ...get().sharedSources, ...get().assignedSources]
               .filter((s) => s.isAdult)
               .map((s) => s.key)
           );
@@ -826,6 +875,9 @@ export const useAppStore = create<AppState>()(
         liveRecent: s.liveRecent,
         sourceHealth: s.sourceHealth,
         envSubsSeen: s.envSubsSeen,
+        siteSubsSeen: s.siteSubsSeen,
+        assignedSubsSeen: s.assignedSubsSeen,
+        assignedKeysSeen: s.assignedKeysSeen,
         yellowFilter: s.yellowFilter,
         adFilter: s.adFilter,
         doubanEnabled: s.doubanEnabled,
@@ -868,14 +920,15 @@ export async function hydrateLiveProbeResults(): Promise<void> {
 
 /** 获取指定 key 的源配置；找不到时支持从 URL 参数兜底构造 */
 export function resolveSource(
-  store: Pick<AppState, 'customAPIs' | 'envSources' | 'sharedSources'>,
+  store: Pick<AppState, 'customAPIs' | 'envSources' | 'sharedSources' | 'assignedSources'>,
   key: string,
   fallback?: { url?: string; detail?: string; name?: string }
 ): SourceConfig | undefined {
   const found =
     store.customAPIs.find((a) => a.key === key) ??
     store.envSources.find((a) => a.key === key) ??
-    store.sharedSources.find((a) => a.key === key);
+    store.sharedSources.find((a) => a.key === key) ??
+    store.assignedSources.find((a) => a.key === key);
   if (found) return found;
   if (fallback?.url) {
     return {

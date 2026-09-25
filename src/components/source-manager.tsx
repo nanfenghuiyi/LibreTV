@@ -17,6 +17,7 @@ import {
   type TestState,
 } from './settings-shared';
 import { EmptyState, Spinner } from './states';
+import { AdminPanel } from './admin-panel';
 import { useSourceProbe } from './use-source-probe';
 import { allLiveSources, isSourceDisabled, keyBelongsToSubscription, resolveSource, subKeyPrefix, useAppStore } from '@/lib/store';
 import type { SourceConfig } from '@/lib/types';
@@ -35,8 +36,8 @@ import { describeParseStats } from '@/lib/tvbox-parser';
  * 选中位置记忆到 localStorage，再次打开回到上次所在面板。
  */
 
-type PrimaryTab = 'sources' | 'prefs' | 'data';
-type SecondaryTab = 'vod' | 'live' | 'subs' | 'shared' | 'playback' | 'image' | 'home' | 'io';
+type PrimaryTab = 'sources' | 'prefs' | 'data' | 'admin';
+type SecondaryTab = 'vod' | 'live' | 'subs' | 'shared' | 'playback' | 'image' | 'home' | 'io' | 'users';
 
 const PRIMARY_TABS: { id: PrimaryTab; label: string; icon: IconName }[] = [
   { id: 'sources', label: '源管理', icon: 'link' },
@@ -57,17 +58,35 @@ const SECONDARY_TABS: Record<PrimaryTab, { id: SecondaryTab; label: string }[]> 
     { id: 'home', label: '首页与内容' },
   ],
   data: [{ id: 'io', label: '配置导入导出' }],
+  admin: [{ id: 'users', label: '用户与邀请码' }],
 };
 
 const TAB_STORAGE_KEY = 'libretv-settings-tab';
 
-export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SourceManagerDrawer({
+  open,
+  onClose,
+  initialPrimary,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** 打开时强制进入的一级页签（如 header 管理面板入口传 'admin'） */
+  initialPrimary?: PrimaryTab;
+}) {
+  const { user, userSystemAvailable } = useAuth();
+  const isAdmin = userSystemAvailable && user?.role === 'admin';
   const [primary, setPrimary] = useState<PrimaryTab>('sources');
   const [secondary, setSecondary] = useState<Record<PrimaryTab, SecondaryTab>>({
     sources: 'vod',
     prefs: 'playback',
     data: 'io',
+    admin: 'users',
   });
+
+  // 管理页签仅对「用户体系可用 + 管理员」出现，且只能通过显式入口（initialPrimary）或手动点击进入
+  const primaryTabs: { id: PrimaryTab; label: string; icon: IconName }[] = isAdmin
+    ? [...PRIMARY_TABS, { id: 'admin', label: '管理', icon: 'bolt' }]
+    : PRIMARY_TABS;
 
   // 挂载后读取上次位置（不在渲染期读 localStorage，避免 SSR/hydration 不一致）
   useEffect(() => {
@@ -79,9 +98,10 @@ export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose:
         secondary?: Partial<Record<PrimaryTab, SecondaryTab>>;
       };
       // 旧版把「数据源订阅」放在「数据」下，现已迁至「源管理」：自动重定向到新位置
+      // admin 页签不参与恢复：管理面板必须显式进入，避免他人共用设备时打开设置直达管理页
       const migratedSubs = saved.secondary?.data === 'subs';
       const targetPrimary = migratedSubs && saved.primary === 'data' ? 'sources' : saved.primary;
-      if (targetPrimary && SECONDARY_TABS[targetPrimary]) setPrimary(targetPrimary);
+      if (targetPrimary && targetPrimary !== 'admin' && SECONDARY_TABS[targetPrimary]) setPrimary(targetPrimary);
       setSecondary((prev) => {
         const next = { ...prev };
         if (migratedSubs) next.sources = 'subs';
@@ -95,6 +115,16 @@ export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose:
       /* 本地记录损坏时忽略，回到默认面板 */
     }
   }, []);
+
+  // 打开抽屉时应用显式指定的初始页签
+  useEffect(() => {
+    if (open && initialPrimary) setPrimary(initialPrimary);
+  }, [open, initialPrimary]);
+
+  // 身份变化（如退出登录）后不在可见页签里时兜底回首页签
+  useEffect(() => {
+    if (!isAdmin && primary === 'admin') setPrimary('sources');
+  }, [isAdmin, primary]);
 
   useEffect(() => {
     try {
@@ -114,7 +144,7 @@ export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose:
       resetScrollKey={current}
       subheader={
         <div className="space-y-2">
-          <TabRow tabs={PRIMARY_TABS} value={primary} onChange={setPrimary} variant="primary" ariaLabel="设置分类" />
+          <TabRow tabs={primaryTabs} value={primary} onChange={setPrimary} variant="primary" ariaLabel="设置分类" />
           {/* 分组下只有一项时无需二级导航，直接展示该面板 */}
           {SECONDARY_TABS[primary].length > 1 && (
             <TabRow
@@ -136,6 +166,7 @@ export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose:
       {current === 'home' && <HomePanel />}
       {current === 'subs' && <SourceSubscriptions />}
       {current === 'io' && <ConfigIoPanel />}
+      {current === 'users' && <AdminPanel />}
     </Drawer>
   );
 }
@@ -228,9 +259,10 @@ function VodSourcesPanel() {
 
   const envKeys = useMemo(() => new Set(store.envSources.map((s) => s.key)), [store.envSources]);
   const sharedKeys = useMemo(() => new Set(store.sharedSources.map((s) => s.key)), [store.sharedSources]);
+  const assignedKeys = useMemo(() => new Set(store.assignedSources.map((s) => s.key)), [store.assignedSources]);
   const all = useMemo(
-    () => [...store.envSources, ...store.sharedSources, ...store.customAPIs],
-    [store.envSources, store.sharedSources, store.customAPIs]
+    () => [...store.envSources, ...store.sharedSources, ...store.assignedSources, ...store.customAPIs],
+    [store.envSources, store.sharedSources, store.assignedSources, store.customAPIs]
   );
 
   const filtered = useMemo(() => {
@@ -241,12 +273,13 @@ function VodSourcesPanel() {
       if (filter === 'enabled' && !(store.selectedKeys.includes(s.key) && !isSourceDisabled(store, s.key))) return false;
       if (filter === 'disabled' && !isSourceDisabled(store, s.key)) return false;
       if (filter === 'sub' && !fromSub) return false;
-      // 手动添加 = 既非订阅导入、也非部署者预置、也非站点共享
-      if (filter === 'manual' && (fromSub || envKeys.has(s.key) || sharedKeys.has(s.key))) return false;
+      // 手动添加 = 既非订阅导入、也非部署者预置、也非站点共享、也非管理员分配
+      if (filter === 'manual' && (fromSub || envKeys.has(s.key) || sharedKeys.has(s.key) || assignedKeys.has(s.key)))
+        return false;
       if (!q) return true;
       return s.name.toLowerCase().includes(q) || s.url.toLowerCase().includes(q);
     });
-  }, [all, query, filter, store, envKeys, sharedKeys]);
+  }, [all, query, filter, store, envKeys, sharedKeys, assignedKeys]);
 
   const visibleKeys = filtered.map((s) => s.key);
   const allSelected = visibleKeys.length > 0 && visibleKeys.every((k) => store.selectedKeys.includes(k));
@@ -282,7 +315,10 @@ function VodSourcesPanel() {
   };
 
   const empty =
-    store.envSources.length === 0 && store.sharedSources.length === 0 && store.customAPIs.length === 0;
+    store.envSources.length === 0 &&
+    store.sharedSources.length === 0 &&
+    store.assignedSources.length === 0 &&
+    store.customAPIs.length === 0;
 
   return (
     <section>
@@ -384,6 +420,7 @@ function VodSourcesPanel() {
                   api={source}
                   isEnv={envKeys.has(source.key)}
                   isShared={sharedKeys.has(source.key)}
+                  isAssigned={assignedKeys.has(source.key)}
                   editing={editing === source.key}
                   onEdit={setEditing}
                   onCancelEdit={() => setEditing(null)}
@@ -419,11 +456,12 @@ function formatEta(done: number, total: number, startedAt: number): string {
   return remainSec > 0 ? ` · 约 ${remainSec}s` : '';
 }
 
-/** 单条点播源行：勾选 / 名称标签 / 健康度 / 探活 / 编辑删除（订阅源、预置源与站点共享源按来源限制操作） */
+/** 单条点播源行：勾选 / 名称标签 / 健康度 / 探活 / 编辑删除（订阅源、预置源、站点共享源与管理员分配源按来源限制操作） */
 function VodSourceRow({
   api,
   isEnv,
   isShared,
+  isAssigned,
   editing,
   onEdit,
   onCancelEdit,
@@ -434,6 +472,7 @@ function VodSourceRow({
   api: SourceConfig;
   isEnv: boolean;
   isShared: boolean;
+  isAssigned: boolean;
   editing: boolean;
   onEdit: (key: string) => void;
   onCancelEdit: () => void;
@@ -505,6 +544,14 @@ function VodSourceRow({
                 站点共享
               </span>
             )}
+            {isAssigned && (
+              <span
+                className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent align-middle"
+                title="管理员分配源：由管理员为你的账号单独分配"
+              >
+                管理员分配
+              </span>
+            )}
             {fromSubscription && (
               <span
                 className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent align-middle"
@@ -525,22 +572,30 @@ function VodSourceRow({
         />
         {!isEnv &&
           !isShared &&
-          (fromSubscription ? (
-            // 订阅源由远端列表管理：编辑会被下次同步覆盖、删除会复活，故置为禁用态并说明去处
+          (fromSubscription || isAssigned ? (
+            // 订阅源由远端列表管理、分配源由管理员管理：本地编辑/删除都会在下次同步时失效，故置为禁用态并说明去处
             <>
               <button
                 className="rounded-md p-2 text-muted/30 cursor-not-allowed shrink-0"
                 disabled
-                aria-label="订阅源不可单独编辑"
-                title="该源来自订阅，修改会在下次同步时被覆盖；请修改远端订阅后重新同步"
+                aria-label={isAssigned ? '分配源不可单独编辑' : '订阅源不可单独编辑'}
+                title={
+                  isAssigned
+                    ? '该源由管理员为你的账号分配，本地修改不会生效；如需调整请联系站点管理员'
+                    : '该源来自订阅，修改会在下次同步时被覆盖；请修改远端订阅后重新同步'
+                }
               >
                 <Icon name="edit" className="w-4 h-4" />
               </button>
               <button
                 className="rounded-md p-2 text-muted/30 cursor-not-allowed shrink-0"
                 disabled
-                aria-label="订阅源不可单独删除"
-                title="该源来自订阅，单独删除会在下次同步时恢复；请到「数据源订阅」删除整个订阅"
+                aria-label={isAssigned ? '分配源不可单独删除' : '订阅源不可单独删除'}
+                title={
+                  isAssigned
+                    ? '该源由管理员为你的账号分配，删除会在下次同步时恢复；如需移除请联系站点管理员'
+                    : '该源来自订阅，单独删除会在下次同步时恢复；请到「数据源订阅」删除整个订阅'
+                }
               >
                 <Icon name="trash" className="w-4 h-4" />
               </button>
@@ -574,6 +629,7 @@ function VodSourceRow({
 
 type DraftVod = { name: string; url: string; detail?: string; isAdult?: boolean };
 type DraftLive = { name?: string; url: string; epg?: string };
+type DraftSub = { url: string; name?: string };
 
 function SharedSourcesPanel() {
   const { toast } = useToast();
@@ -583,10 +639,13 @@ function SharedSourcesPanel() {
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [sources, setSources] = useState<DraftVod[]>([]);
   const [liveSources, setLiveSources] = useState<DraftLive[]>([]);
+  const [subscriptions, setSubscriptions] = useState<DraftSub[]>([]);
   const [saving, setSaving] = useState(false);
   /** 表单展开状态：null=收起；-1=新增；>=0=编辑该下标 */
   const [vodEdit, setVodEdit] = useState<number | null>(null);
   const [liveEdit, setLiveEdit] = useState<number | null>(null);
+  const [subEdit, setSubEdit] = useState<number | null>(null);
+  const [subDraft, setSubDraft] = useState<DraftSub>({ url: '' });
 
   useEffect(() => {
     let cancelled = false;
@@ -601,6 +660,7 @@ function SharedSourcesPanel() {
           setUpdatedAt(config.updatedAt ?? null);
           setSources(config.sources.map((s) => ({ name: s.name, url: s.url, detail: s.detail, isAdult: s.isAdult })));
           setLiveSources(config.liveSources.map((s) => ({ name: s.name, url: s.url, epg: s.epg })));
+          setSubscriptions(config.subscriptions.map((s) => ({ url: s.url, name: s.name })));
         }
       })
       .catch(() => {
@@ -623,6 +683,7 @@ function SharedSourcesPanel() {
       await api.saveSharedSources({
         sources,
         liveSources: liveSources.map((s) => ({ ...s, name: s.name || hostnameOf(s.url) })),
+        subscriptions: subscriptions.map((s) => ({ url: s.url.trim(), name: s.name?.trim() || undefined })),
       });
       toast('共享源已保存，全站登录访客生效', 'success');
       // 立即把最新配置合入本地 store（新增共享源对本人自动勾选）
@@ -667,7 +728,7 @@ function SharedSourcesPanel() {
     );
   }
 
-  const dirtyCount = sources.length + liveSources.length;
+  const dirtyCount = sources.length + liveSources.length + subscriptions.length;
 
   return (
     <section>
@@ -682,7 +743,7 @@ function SharedSourcesPanel() {
       />
       <p className="text-xs text-faint mb-3 leading-relaxed">
         这里配置的源由站点统一管理（存于 Cloudflare D1）：保存后所有登录访客自动可用，访客本地的勾选状态不受影响。
-        保存即整体覆盖，删除的源会在访客端同步移除。
+        站点订阅会由全站登录用户自动拉取同步（24 小时内不重复拉取）。保存即整体覆盖，删除的条目会在访客端同步移除。
       </p>
 
       {/* 点播源 */}
@@ -786,6 +847,97 @@ function SharedSourcesPanel() {
               <button
                 className="rounded-md p-2 text-muted transition-colors hover:bg-hover hover:text-danger shrink-0"
                 onClick={() => setLiveSources((prev) => prev.filter((_, idx) => idx !== i))}
+                aria-label="删除"
+                title="删除（保存后生效）"
+              >
+                <Icon name="trash" className="w-4 h-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* 站点订阅：登录用户自动拉取同步，与本地订阅互不影响 */}
+      <div className="flex items-center justify-between mb-2 mt-4">
+        <h3 className="text-sm font-medium text-content">
+          站点订阅{subscriptions.length > 0 && ` · ${subscriptions.length} 个`}
+        </h3>
+        <button
+          className="btn-ghost btn-sm"
+          onClick={() => {
+            setSubDraft({ url: '' });
+            setSubEdit(-1);
+          }}
+        >
+          <Icon name="plus" className="w-3.5 h-3.5" />
+          添加
+        </button>
+      </div>
+      {subEdit !== null && (
+        <div className="bg-card rounded-lg p-3 mb-2 space-y-2">
+          <input
+            className="input w-full"
+            placeholder="订阅地址（LibreTV 源列表或 TVBOX 配置的 JSON URL）"
+            value={subDraft.url}
+            onChange={(e) => setSubDraft((p) => ({ ...p, url: e.target.value }))}
+          />
+          <input
+            className="input w-full"
+            placeholder="备注名称（可选，默认显示域名）"
+            value={subDraft.name ?? ''}
+            onChange={(e) => setSubDraft((p) => ({ ...p, name: e.target.value }))}
+          />
+          <div className="flex justify-end gap-2">
+            <button className="btn-ghost btn-sm" onClick={() => setSubEdit(null)}>
+              取消
+            </button>
+            <button
+              className="btn-primary btn-sm"
+              onClick={() => {
+                const idx = subEdit;
+                if (idx === null) return;
+                const url = subDraft.url.trim();
+                if (!validateSourceUrl(url)) {
+                  toast('订阅地址需以 http:// 或 https:// 开头', 'warning');
+                  return;
+                }
+                const entry: DraftSub = { url, name: subDraft.name?.trim() || undefined };
+                setSubscriptions((prev) => {
+                  if (idx < 0) return [...prev, entry];
+                  return prev.map((s, i) => (i === idx ? entry : s));
+                });
+                setSubEdit(null);
+              }}
+            >
+              确认
+            </button>
+          </div>
+        </div>
+      )}
+      {subscriptions.length === 0 && subEdit === null ? (
+        <p className="text-xs text-faint">还没有共享订阅。登录用户会自动拉取订阅内容并同步其中的点播源与直播源。</p>
+      ) : (
+        <ul className="space-y-2">
+          {subscriptions.map((s, i) => (
+            <li key={`${s.url}|${s.name ?? ''}`} className="bg-card rounded-lg p-3 flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-content truncate">{s.name || hostnameOf(s.url)}</div>
+                <div className="text-xs text-faint truncate">{s.url}</div>
+              </div>
+              <button
+                className="rounded-md p-2 text-muted transition-colors hover:bg-hover hover:text-accent shrink-0"
+                onClick={() => {
+                  setSubDraft({ url: s.url, name: s.name });
+                  setSubEdit(i);
+                }}
+                aria-label="编辑"
+                title="编辑"
+              >
+                <Icon name="edit" className="w-4 h-4" />
+              </button>
+              <button
+                className="rounded-md p-2 text-muted transition-colors hover:bg-hover hover:text-danger shrink-0"
+                onClick={() => setSubscriptions((prev) => prev.filter((_, idx) => idx !== i))}
                 aria-label="删除"
                 title="删除（保存后生效）"
               >

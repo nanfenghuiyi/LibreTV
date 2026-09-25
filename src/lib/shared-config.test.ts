@@ -136,6 +136,36 @@ describe('shared-config D1 读写', () => {
     await expect(mod.getSharedSources()).resolves.toBeNull();
     expect(warn).toHaveBeenCalled();
   });
+
+  it('站点订阅：独立保存与读回；仅保存源时未传订阅保留原值', async () => {
+    const db = makeFakeD1();
+    cf.getCloudflareContext.mockReturnValue({ env: { DB: db } });
+    const mod = await load();
+
+    // 只保存订阅：url 归一化（去尾斜杠），无 sources 行时 sources 为空数组
+    await mod.saveSharedSources({
+      subscriptions: [{ url: 'https://sub.example.com/list.json/', name: '订阅' }],
+    });
+    let loaded = await mod.getSharedSources();
+    expect(loaded?.subscriptions).toEqual([{ url: 'https://sub.example.com/list.json', name: '订阅' }]);
+    expect(loaded?.sources).toEqual([]);
+
+    // 仅保存源：未传 subscriptions 保留原值
+    await mod.saveSharedSources({
+      sources: [{ name: 'A', url: 'https://a.example.com/vod' }],
+      liveSources: [],
+    });
+    loaded = await mod.getSharedSources();
+    expect(loaded?.sources.map((s) => s.name)).toEqual(['A']);
+    expect(loaded?.subscriptions.map((s) => s.url)).toEqual(['https://sub.example.com/list.json']);
+
+    // 订阅去重：尾斜杠差异不产生两条
+    await mod.saveSharedSources({
+      subscriptions: [{ url: 'https://x.example.com/s' }, { url: 'https://x.example.com/s/' }],
+    });
+    loaded = await mod.getSharedSources();
+    expect(loaded?.subscriptions).toHaveLength(1);
+  });
 });
 
 describe('shared-config 输入校验', () => {
@@ -175,5 +205,15 @@ describe('shared-config 输入校验', () => {
       isAdult: true,
     });
     expect(result.liveSources).toEqual([]);
+  });
+
+  it('站点订阅校验：url 必须 http(s)、数量上限 50', async () => {
+    const db = makeFakeD1();
+    cf.getCloudflareContext.mockReturnValue({ env: { DB: db } });
+    const mod = await load();
+
+    await expect(mod.saveSharedSources({ subscriptions: [{ url: 'ftp://x' }] })).rejects.toThrow(/url 必须以 http/);
+    const many = Array.from({ length: 51 }, (_, i) => ({ url: `https://s${i}.example.com/list.json` }));
+    await expect(mod.saveSharedSources({ subscriptions: many })).rejects.toThrow(/超出上限/);
   });
 });

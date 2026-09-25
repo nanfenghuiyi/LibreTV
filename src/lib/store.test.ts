@@ -425,3 +425,73 @@ describe('setSharedSources 站点共享源', () => {
     expect(store().selectedKeys).not.toContain('shared_vod_x');
   });
 });
+
+describe('setAssignedSources 管理员分配源', () => {
+  const vod = { key: 'assign_vod_a', name: '分配源', url: 'https://a.example.com/api.php/provide/vod' };
+  const live = { key: 'assign_live_b', name: '分配直播', url: 'https://live.example.com/a.m3u' };
+
+  beforeEach(() => {
+    useAppStore.setState({
+      customAPIs: [],
+      envSources: [],
+      sharedSources: [],
+      assignedSources: [],
+      assignedLiveSources: [],
+      assignedKeysSeen: [],
+      selectedKeys: [],
+      liveSelectedUrls: [],
+      yellowFilter: false,
+    });
+  });
+
+  it('写入分配点播源与直播源：自动勾选、自动启用，seen 记入 assignedKeysSeen', () => {
+    store().setAssignedSources([vod], [live]);
+
+    const s = store();
+    expect(s.assignedSources.map((x) => x.key)).toEqual([vod.key]);
+    expect(s.assignedLiveSources.map((x) => x.url)).toEqual([live.url]);
+    expect(s.selectedKeys).toContain(vod.key);
+    expect(s.liveSelectedUrls).toContain(live.url);
+    expect(s.assignedKeysSeen).toContain(vod.key);
+  });
+
+  it('幂等：重复下发不会重复启用直播源；用户取消勾选后不勾回', () => {
+    store().setAssignedSources([vod], [live]);
+    store().toggleSourceSelected(vod.key);
+
+    store().setAssignedSources([vod], [live]);
+    expect(store().liveSelectedUrls).toEqual([live.url]);
+    expect(store().selectedKeys).not.toContain(vod.key);
+  });
+
+  it('成人过滤开启时，成人分配源不自动勾选', () => {
+    useAppStore.setState({ yellowFilter: true });
+    store().setAssignedSources([{ ...vod, isAdult: true }], []);
+    expect(store().selectedKeys).not.toContain(vod.key);
+  });
+
+  it('resolveSource 能解析分配源', () => {
+    store().setAssignedSources([vod], []);
+    expect(resolveSource(store(), vod.key)).toEqual(vod);
+  });
+});
+
+describe('markSubsSeen 三桶 seen', () => {
+  beforeEach(() => {
+    useAppStore.setState({ envSubsSeen: [], siteSubsSeen: [], assignedSubsSeen: [] });
+  });
+
+  it('env/site/assigned 三桶互不相干，写入去重', () => {
+    const urlA = 'https://a.example.com/sub';
+    const urlB = 'https://b.example.com/sub';
+    store().markSubsSeen('env', [urlA]);
+    store().markSubsSeen('site', [urlA, urlB]);
+    store().markSubsSeen('assigned', [urlA]);
+    store().markSubsSeen('env', [urlA]); // 重复写入去重
+
+    const s = store();
+    expect(s.envSubsSeen).toEqual([urlA]);
+    expect(s.siteSubsSeen).toEqual([urlA, urlB]);
+    expect(s.assignedSubsSeen).toEqual([urlA]);
+  });
+});

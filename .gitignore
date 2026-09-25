@@ -6,6 +6,7 @@ out/
 .wrangler-home/
 .env
 .env*.local
+.dev.vars
 *.tsbuildinfo
 vitest-results.json
 *.log

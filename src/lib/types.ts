@@ -102,6 +102,52 @@ export interface AuthStatusResponse {
   defaultLiveSources: LiveSourceConfig[];
   /** 部署者通过 DEFAULT_SUBSCRIPTIONS 环境变量预置的 SourceList 订阅链接（未配置时为空数组） */
   defaultSubscriptions: { url: string; name?: string }[];
+  /** 用户体系是否可用（Workers + D1 绑定） */
+  userSystemAvailable?: boolean;
+  /** 注册模式：invite 需邀请码（默认）/ open 开放 / off 关闭 */
+  registrationMode?: 'invite' | 'open' | 'off';
+  /** 当前会话身份（未登录为 null） */
+  me?: CurrentUser | null;
+}
+
+/** 当前会话用户信息 */
+export interface CurrentUser {
+  username: string;
+  role: 'admin' | 'user';
+}
+
+/** 云端用户数据行（/api/user/data） */
+export interface UserDataItem {
+  /** 数据类型：history / progress / search / settings */
+  type: string;
+  /** 键：history 为记录 id，progress 为进度 key，search/settings 固定 'list'/'snapshot' */
+  k: string;
+  /** JSON 字符串载荷 */
+  v: string;
+  /** 最后更新时间（epoch ms，LWW 依据） */
+  updatedAt: number;
+}
+
+/** 管理面板用户行 */
+export interface AdminUserRow {
+  username: string;
+  role: 'admin' | 'user';
+  disabled: boolean;
+  epoch: number;
+  createdAt: number;
+  lastLoginAt: number | null;
+  /** 是否被管理员分配了专属数据源 */
+  sourceAssigned?: boolean;
+}
+
+/** 管理面板邀请码行 */
+export interface AdminInviteRow {
+  code: string;
+  createdAt: number;
+  expiresAt: number | null;
+  usedCount: number;
+  maxUses: number;
+  note: string | null;
 }
 
 // —— 直播 / IPTV ——
@@ -198,10 +244,31 @@ export interface SourceListPayload {
   stats?: SubscriptionParseStats;
 }
 
+/** 订阅条目（只存 URL，内容由客户端经订阅引擎拉取同步） */
+export interface SubscriptionEntry {
+  url: string;
+  name?: string;
+}
+
 /** 站点级共享源配置（管理员存入 D1，登录访客均可读取） */
 export interface SharedSourcesPayload {
   sources: SourceConfig[];
   liveSources: LiveSourceConfig[];
+  /** 站点级订阅链接：全站登录用户自动拉取同步 */
+  subscriptions: SubscriptionEntry[];
+  /** 最近一次保存的时间戳（epoch ms） */
+  updatedAt?: number;
+}
+
+/**
+ * 管理员分配给单个用户的专属源配置（替换模式）。
+ * 三类字段任一非空即视为「已分配」：该用户不再接收环境预置源与站点共享源，
+ * 仅看到分配的源 + 自己添加的自定义源。
+ */
+export interface AssignedSourcesPayload {
+  sources: SourceConfig[];
+  liveSources: LiveSourceConfig[];
+  subscriptions: SubscriptionEntry[];
   /** 最近一次保存的时间戳（epoch ms） */
   updatedAt?: number;
 }

@@ -1,28 +1,35 @@
 import { NextResponse } from 'next/server';
-import { guardRequest, jsonError } from '@/lib/api-guard';
+import { requireUser, requireAdminUser, jsonError } from '@/lib/api-guard';
+import { getD1 } from '@/lib/d1';
 import {
   getSharedSources,
-  hasSharedStore,
   saveSharedSources,
 } from '@/lib/shared-config';
+import { getUserSources } from '@/lib/user-sources';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
  * 站点级共享源配置（存于 Cloudflare D1）。
- * GET：登录访客读取（无 D1 时 available=false，前端隐藏站点源功能）。
- * PUT：凭 PASSWORD 会话覆盖保存，所有访客生效。
+ * GET：登录访客读取站点共享源及本人的管理员分配源
+ *   （有分配时前端进入替换模式，仅呈现分配源；无 D1 时 available=false，前端隐藏站点源功能）。
+ * PUT：仅管理员可覆盖保存（用户体系可用时 D1 复查；所有访客生效）。
  */
 export async function GET(req: Request) {
-  const guarded = guardRequest(req);
-  if (guarded) return guarded;
+  const guard = await requireUser(req);
+  if (!guard.ok) return guard.response;
 
-  if (!(await hasSharedStore())) {
-    return NextResponse.json({ available: false, config: null });
+  const db = await getD1();
+  if (!db) {
+    return NextResponse.json({ available: false, config: null, assigned: null });
   }
   try {
-    return NextResponse.json({ available: true, config: await getSharedSources() });
+    const [config, assigned] = await Promise.all([
+      getSharedSources(),
+      getUserSources(db, guard.session.userId),
+    ]);
+    return NextResponse.json({ available: true, config, assigned });
   } catch (err) {
     console.error('[LibreTV] 读取共享源失败：', err);
     return jsonError('读取共享源失败', 500);
@@ -30,10 +37,11 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  const guarded = guardRequest(req);
-  if (guarded) return guarded;
+  const guard = await requireAdminUser(req);
+  if (!guard.ok) return guard.response;
 
-  if (!(await hasSharedStore())) {
+  const db = await getD1();
+  if (!db) {
     return jsonError('当前部署未配置 D1 数据库，无法使用站点共享源', 501);
   }
   let body: unknown;
@@ -44,7 +52,7 @@ export async function PUT(req: Request) {
   }
   try {
     const config = await saveSharedSources(
-      (body ?? {}) as { sources?: unknown; liveSources?: unknown }
+      (body ?? {}) as { sources?: unknown; liveSources?: unknown; subscriptions?: unknown }
     );
     return NextResponse.json({ available: true, config });
   } catch (err) {

@@ -60,6 +60,36 @@ db.version(2).stores({
 export const MAX_HISTORY = 100;
 export const MAX_SEARCH_HISTORY = 10;
 
+// —— 云同步推送回调（依赖倒置：user-sync.ts 注册，本模块不反向依赖） ——
+
+/** 本地写路径产生的同步操作（由 user-sync.ts 消费，防抖批量推云端） */
+export type SyncPushOp =
+  | { kind: 'history-upsert'; entry: HistoryEntry }
+  | { kind: 'history-delete'; id: string }
+  | { kind: 'history-clear' }
+  | { kind: 'progress-upsert'; entry: ProgressEntry }
+  | { kind: 'progress-clear'; key: string }
+  | { kind: 'progress-clear-all' }
+  /** 搜索历史整表变化（引擎 flush 时读取 db.searchHistory 全表） */
+  | { kind: 'search-list' }
+  /** 设置快照变化（引擎 flush 时读取 localStorage） */
+  | { kind: 'settings-snapshot' };
+
+let pushSink: ((op: SyncPushOp) => void) | null = null;
+
+/** 注册云同步推送回调（传 null 注销）。仅在用户登录且云端可用时由 user-sync 注册 */
+export function setPushSink(sink: ((op: SyncPushOp) => void) | null): void {
+  pushSink = sink;
+}
+
+function emitSyncOp(op: SyncPushOp): void {
+  try {
+    pushSink?.(op);
+  } catch {
+    // 同步推送失败不影响本地写入
+  }
+}
+
 export async function upsertHistory(entry: Omit<HistoryEntry, 'id'>): Promise<void> {
   const id = `${entry.sourceKey}_${entry.vodId}`;
   const existing = await db.history.get(id);
@@ -72,11 +102,13 @@ export async function upsertHistory(entry: Omit<HistoryEntry, 'id'>): Promise<vo
     timestamp: Date.now(),
   };
   await db.history.put(merged);
+  emitSyncOp({ kind: 'history-upsert', entry: merged });
   // 淘汰最旧记录
   const count = await db.history.count();
   if (count > MAX_HISTORY) {
     const oldest = await db.history.orderBy('timestamp').limit(count - MAX_HISTORY).toArray();
     await db.history.bulkDelete(oldest.map((o) => o.id));
+    for (const o of oldest) emitSyncOp({ kind: 'history-delete', id: o.id });
   }
 }
 
@@ -90,20 +122,25 @@ export async function updateHistoryProgress(
   const existing = await db.history.get(id);
   if (!existing) return;
   if (Math.abs(existing.playbackPosition - position) < 2 && Math.abs(existing.duration - duration) < 2) return;
+  const updated: HistoryEntry = { ...existing, playbackPosition: position, duration, timestamp: Date.now() };
   await db.history.update(id, {
     playbackPosition: position,
     duration,
-    timestamp: Date.now(),
+    timestamp: updated.timestamp,
   });
+  emitSyncOp({ kind: 'history-upsert', entry: updated });
 }
 
 export async function removeHistory(sourceKey: string, vodId: string): Promise<void> {
   await db.history.delete(`${sourceKey}_${vodId}`);
+  emitSyncOp({ kind: 'history-delete', id: `${sourceKey}_${vodId}` });
 }
 
 export async function clearAllHistory(): Promise<void> {
   // 一并清进度表：否则从历史重新打开时可能取到已清空的旧进度
   await Promise.all([db.history.clear(), db.progress.clear()]);
+  emitSyncOp({ kind: 'history-clear' });
+  emitSyncOp({ kind: 'progress-clear-all' });
 }
 
 export function progressKeyOf(sourceKey: string, vodId: string, episodeIndex: number): string {
@@ -112,16 +149,19 @@ export function progressKeyOf(sourceKey: string, vodId: string, episodeIndex: nu
 
 export async function saveProgress(sourceKey: string, vodId: string, episodeIndex: number, position: number, duration: number): Promise<void> {
   if (!duration || position < 1) return;
-  await db.progress.put({
+  const entry: ProgressEntry = {
     key: progressKeyOf(sourceKey, vodId, episodeIndex),
     position,
     duration,
     updatedAt: Date.now(),
-  });
+  };
+  await db.progress.put(entry);
+  emitSyncOp({ kind: 'progress-upsert', entry });
 }
 
 export async function clearProgress(sourceKey: string, vodId: string, episodeIndex: number): Promise<void> {
   await db.progress.delete(progressKeyOf(sourceKey, vodId, episodeIndex));
+  emitSyncOp({ kind: 'progress-clear', key: progressKeyOf(sourceKey, vodId, episodeIndex) });
 }
 
 export async function addSearchHistory(text: string): Promise<void> {
@@ -133,20 +173,24 @@ export async function addSearchHistory(text: string): Promise<void> {
     const oldest = await db.searchHistory.orderBy('timestamp').limit(count - MAX_SEARCH_HISTORY).toArray();
     await db.searchHistory.bulkDelete(oldest.map((o) => o.text));
   }
+  emitSyncOp({ kind: 'search-list' });
 }
 
 export async function removeSearchHistory(text: string): Promise<void> {
   await db.searchHistory.delete(text);
+  emitSyncOp({ kind: 'search-list' });
 }
 
 export async function clearSearchHistory(): Promise<void> {
   await db.searchHistory.clear();
+  emitSyncOp({ kind: 'search-list' });
 }
 
 /** 撤销「清空搜索记录」：按原时间戳回填，保持原有顺序 */
 export async function restoreSearchHistory(entries: SearchHistoryEntry[]): Promise<void> {
   if (entries.length === 0) return;
   await db.searchHistory.bulkPut(entries);
+  emitSyncOp({ kind: 'search-list' });
 }
 
 // —— 直播测活缓存（TTL 过滤由调用方负责，本层只管存取） ——

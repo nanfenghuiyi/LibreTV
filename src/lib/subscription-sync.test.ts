@@ -10,11 +10,11 @@ vi.mock('./db', () => ({
 
 // 订阅内容由服务端代理拉取（需登录），测试中直接 mock
 vi.mock('./client-api', () => ({
-  api: { fetchSourceList: vi.fn() },
+  api: { fetchSourceList: vi.fn(), getSharedSources: vi.fn() },
 }));
 
 import { api } from './client-api';
-import { applyEnvPresets } from './subscription-sync';
+import { applyEnvPresets, bootstrapSources } from './subscription-sync';
 import { useAppStore } from './store';
 import type { AuthStatusResponse, SourceListPayload } from './types';
 
@@ -45,6 +45,7 @@ const payload: SourceListPayload = {
 };
 
 const fetchSourceList = vi.mocked(api.fetchSourceList);
+const getSharedSources = vi.mocked(api.getSharedSources);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -129,5 +130,85 @@ describe('applyEnvPresets', () => {
     await applyEnvPresets(status({ defaultSubscriptions: [{ url: SUB_URL }] }));
 
     expect(fetchSourceList).not.toHaveBeenCalled();
+  });
+});
+
+describe('bootstrapSources', () => {
+  const sharedVod = { key: 'shared_vod_s', name: '共享源', url: 'https://shared.example.com/api.php/provide/vod' };
+  const assignVod = { key: 'assign_vod_a', name: '分配源', url: 'https://assign.example.com/api.php/provide/vod' };
+  const envVod = { key: 'env_0', name: '预置源', url: 'https://env.example.com/api.php/provide/vod' };
+
+  beforeEach(() => {
+    useAppStore.setState({
+      sharedSources: [],
+      sharedLiveSources: [],
+      sharedKeysSeen: [],
+      assignedSources: [],
+      assignedLiveSources: [],
+      assignedKeysSeen: [],
+      siteSubsSeen: [],
+      assignedSubsSeen: [],
+    });
+  });
+
+  it('未登录：仅应用 env 预置，不拉取共享/分配源', async () => {
+    await bootstrapSources(status({ defaultSources: [envVod] }));
+
+    expect(getSharedSources).not.toHaveBeenCalled();
+    expect(useAppStore.getState().envSources.map((x) => x.key)).toEqual([envVod.key]);
+  });
+
+  it('已登录且有分配源：替换模式——清空 env/shared 下发，仅应用分配源与分配订阅', async () => {
+    useAppStore.setState({ envSources: [envVod], sharedSources: [sharedVod] });
+    getSharedSources.mockResolvedValue({
+      available: true,
+      config: { sources: [sharedVod], liveSources: [], subscriptions: [] },
+      assigned: { sources: [assignVod], liveSources: [], subscriptions: [{ url: SUB_URL }], updatedAt: 1 },
+    });
+    fetchSourceList.mockResolvedValue(payload);
+
+    await bootstrapSources(status({ verified: true }));
+
+    const s = useAppStore.getState();
+    expect(s.envSources).toEqual([]);
+    expect(s.sharedSources).toEqual([]);
+    expect(s.assignedSources.map((x) => x.key)).toEqual([assignVod.key]);
+    expect(s.selectedKeys).toContain(assignVod.key);
+    // 分配订阅以 assigned 桶导入并标记 seen
+    expect(s.customAPIs.map((x) => x.url)).toEqual(payload.sources.map((x) => x.url));
+    expect(s.assignedSubsSeen).toContain(SUB_URL);
+    expect(s.siteSubsSeen).not.toContain(SUB_URL);
+  });
+
+  it('已登录且无分配：应用站点共享源与站点订阅，并照常应用 env 预置', async () => {
+    getSharedSources.mockResolvedValue({
+      available: true,
+      config: { sources: [sharedVod], liveSources: [], subscriptions: [{ url: SUB_URL }] },
+      assigned: null,
+    });
+    fetchSourceList.mockResolvedValue(payload);
+
+    await bootstrapSources(status({ verified: true, defaultSources: [envVod] }));
+
+    const s = useAppStore.getState();
+    expect(s.sharedSources.map((x) => x.key)).toEqual([sharedVod.key]);
+    expect(s.siteSubsSeen).toContain(SUB_URL);
+    expect(s.envSources.map((x) => x.key)).toEqual([envVod.key]);
+  });
+
+  it('无 D1 绑定（available=false）：跳过共享源，走 env 预置兜底', async () => {
+    getSharedSources.mockResolvedValue({ available: false, config: null, assigned: null });
+
+    await bootstrapSources(status({ verified: true, defaultSources: [envVod] }));
+
+    expect(useAppStore.getState().envSources.map((x) => x.key)).toEqual([envVod.key]);
+  });
+
+  it('getSharedSources 拉取失败：静默降级到 env 预置', async () => {
+    getSharedSources.mockRejectedValue(new Error('network down'));
+
+    await bootstrapSources(status({ verified: true, defaultSources: [envVod] }));
+
+    expect(useAppStore.getState().envSources.map((x) => x.key)).toEqual([envVod.key]);
   });
 });

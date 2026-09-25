@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { guardRequest } from '@/lib/api-guard';
+import { requireAdminUser } from '@/lib/api-guard';
 import { MAX_LIVE_SOURCES, MAX_VOD_SOURCES } from '@/lib/source-list';
 import { MAX_PUBLISH_BYTES, publishSourceList } from '@/lib/source-list-publish';
 
@@ -55,10 +55,10 @@ function normalizePayload(raw: unknown): { name?: string; sources: VodOut[]; liv
   return { name: text(record.name, 64) || undefined, sources, liveSources };
 }
 
-/** 把当前源列表发布到第三方粘贴板，返回可直接填入订阅框的 URL */
+/** 把当前源列表发布到第三方粘贴板，返回可直接填入订阅框的 URL（仅管理员） */
 export async function POST(req: Request) {
-  const guarded = guardRequest(req);
-  if (guarded) return guarded;
+  const guard = await requireAdminUser(req);
+  if (!guard.ok) return guard.response;
 
   let raw: unknown;
   try {
